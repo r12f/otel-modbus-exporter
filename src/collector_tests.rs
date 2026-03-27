@@ -112,6 +112,7 @@ fn test_collector_config(name: &str) -> Collector {
         slave_id: 1,
         polling_interval: Duration::from_millis(100),
         labels: HashMap::new(),
+        metrics_files: None,
         metrics: vec![Metric {
             name: "temperature".to_string(),
             description: "Temperature sensor".to_string(),

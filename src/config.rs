@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(name = "otel-modbus-exporter")]
@@ -148,6 +150,9 @@ pub struct Collector {
     pub polling_interval: Duration,
     #[serde(default)]
     pub labels: HashMap<String, String>,
+    #[serde(default)]
+    pub metrics_files: Option<Vec<String>>,
+    #[serde(default)]
     pub metrics: Vec<Metric>,
 }
 
@@ -272,12 +277,211 @@ pub enum ByteOrder {
     MidLittleEndian,
 }
 
+/// Metrics file for reusable metric definitions.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MetricsFile {
+    #[serde(default)]
+    pub defaults: Option<MetricDefaults>,
+    pub metrics: Vec<RawMetric>,
+}
+
+/// Default values applied to all metrics in a metrics file.
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub struct MetricDefaults {
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "type")]
+    pub metric_type: Option<MetricType>,
+    pub register_type: Option<RegisterType>,
+    pub data_type: Option<DataType>,
+    pub byte_order: Option<ByteOrder>,
+    pub scale: Option<f64>,
+    pub offset: Option<f64>,
+    pub unit: Option<String>,
+}
+
+/// A metric with all optional fields, used for metrics file parsing.
+/// Required fields are filled from defaults or must be present.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawMetric {
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(rename = "type")]
+    pub metric_type: Option<MetricType>,
+    pub register_type: Option<RegisterType>,
+    pub address: Option<u16>,
+    pub data_type: Option<DataType>,
+    pub byte_order: Option<ByteOrder>,
+    pub scale: Option<f64>,
+    pub offset: Option<f64>,
+    pub unit: Option<String>,
+}
+
+impl RawMetric {
+    /// Apply defaults and convert to a full Metric.
+    fn into_metric(
+        self,
+        defaults: &Option<MetricDefaults>,
+        collector_name: &str,
+        file_path: &str,
+    ) -> Result<Metric> {
+        let d = defaults.as_ref();
+
+        let metric_type = self
+            .metric_type
+            .or_else(|| d.and_then(|d| d.metric_type))
+            .with_context(|| {
+                format!(
+                    "collector '{}': metric '{}' in '{}': missing required field 'type'",
+                    collector_name, self.name, file_path
+                )
+            })?;
+
+        let register_type = self
+            .register_type
+            .or_else(|| d.and_then(|d| d.register_type))
+            .with_context(|| {
+                format!(
+                    "collector '{}': metric '{}' in '{}': missing required field 'register_type'",
+                    collector_name, self.name, file_path
+                )
+            })?;
+
+        let address = self.address.with_context(|| {
+            format!(
+                "collector '{}': metric '{}' in '{}': missing required field 'address'",
+                collector_name, self.name, file_path
+            )
+        })?;
+
+        let data_type = self
+            .data_type
+            .or_else(|| d.and_then(|d| d.data_type))
+            .with_context(|| {
+                format!(
+                    "collector '{}': metric '{}' in '{}': missing required field 'data_type'",
+                    collector_name, self.name, file_path
+                )
+            })?;
+
+        Ok(Metric {
+            name: self.name,
+            description: self
+                .description
+                .or_else(|| d.and_then(|d| d.description.clone()))
+                .unwrap_or_default(),
+            metric_type,
+            register_type,
+            address,
+            data_type,
+            byte_order: self
+                .byte_order
+                .or_else(|| d.and_then(|d| d.byte_order))
+                .unwrap_or(ByteOrder::BigEndian),
+            scale: self
+                .scale
+                .or_else(|| d.and_then(|d| d.scale))
+                .unwrap_or(1.0),
+            offset: self
+                .offset
+                .or_else(|| d.and_then(|d| d.offset))
+                .unwrap_or(0.0),
+            unit: self
+                .unit
+                .or_else(|| d.and_then(|d| d.unit.clone()))
+                .unwrap_or_default(),
+        })
+    }
+}
+
+impl Collector {
+    /// Load and merge metrics from metrics_files and inline metrics.
+    pub fn resolve_metrics_files(&mut self, config_dir: &Path) -> Result<()> {
+        let files = match &self.metrics_files {
+            Some(f) if !f.is_empty() => f.clone(),
+            _ => return Ok(()),
+        };
+
+        let mut merged: IndexMap<String, Metric> = IndexMap::new();
+
+        for file_path_str in &files {
+            let file_path = if Path::new(file_path_str).is_absolute() {
+                PathBuf::from(file_path_str)
+            } else {
+                config_dir.join(file_path_str)
+            };
+
+            let content = std::fs::read_to_string(&file_path).with_context(|| {
+                format!(
+                    "collector '{}': reading metrics file '{}'",
+                    self.name,
+                    file_path.display()
+                )
+            })?;
+
+            let metrics_file: MetricsFile = serde_yaml::from_str(&content).with_context(|| {
+                format!(
+                    "collector '{}': parsing metrics file '{}'",
+                    self.name,
+                    file_path.display()
+                )
+            })?;
+
+            if metrics_file.metrics.is_empty() {
+                bail!(
+                    "collector '{}': metrics file '{}' contains no metrics",
+                    self.name,
+                    file_path.display()
+                );
+            }
+
+            info!(
+                collector = %self.name,
+                file = %file_path.display(),
+                count = metrics_file.metrics.len(),
+                "loaded metrics file"
+            );
+
+            for raw in metrics_file.metrics {
+                let metric = raw.into_metric(
+                    &metrics_file.defaults,
+                    &self.name,
+                    &file_path.display().to_string(),
+                )?;
+                merged.insert(metric.name.clone(), metric);
+            }
+        }
+
+        // Inline metrics have highest priority
+        let inline_metrics = std::mem::take(&mut self.metrics);
+        for metric in inline_metrics {
+            merged.insert(metric.name.clone(), metric);
+        }
+
+        self.metrics = merged.into_values().collect();
+        Ok(())
+    }
+}
+
 impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let content =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let config: Config =
+        let mut config: Config =
             serde_yaml::from_str(&content).with_context(|| "parsing config YAML")?;
+
+        let config_dir = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+
+        for collector in &mut config.collectors {
+            collector.resolve_metrics_files(&config_dir)?;
+        }
+
         config.validate()?;
         Ok(config)
     }
