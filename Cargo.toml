@@ -22,3 +22,6 @@ anyhow = "1"
 dashmap = "6"
 humantime-serde = "1"
 async-trait = "0.1"
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json"] }
