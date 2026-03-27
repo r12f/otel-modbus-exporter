@@ -1,0 +1,59 @@
+# Eastron SDM630 Modbus V2 energy meter
+# Reference: SDM630 Modbus Protocol documentation
+defaults:
+  register_type: input
+  data_type: f32
+  byte_order: big_endian
+  type: gauge
+
+metrics:
+  - name: voltage_l1
+    description: "Phase 1 line-to-neutral voltage"
+    address: 0
+    unit: "V"
+
+  - name: voltage_l2
+    description: "Phase 2 line-to-neutral voltage"
+    address: 2
+    unit: "V"
+
+  - name: voltage_l3
+    description: "Phase 3 line-to-neutral voltage"
+    address: 4
+    unit: "V"
+
+  - name: current_l1
+    description: "Phase 1 current"
+    address: 6
+    unit: "A"
+
+  - name: current_l2
+    description: "Phase 2 current"
+    address: 8
+    unit: "A"
+
+  - name: current_l3
+    description: "Phase 3 current"
+    address: 10
+    unit: "A"
+
+  - name: power_l1
+    description: "Phase 1 active power"
+    address: 12
+    unit: "W"
+
+  - name: power_l2
+    description: "Phase 2 active power"
+    address: 14
+    unit: "W"
+
+  - name: power_l3
+    description: "Phase 3 active power"
+    address: 16
+    unit: "W"
+
+  - name: total_energy
+    description: "Total active energy"
+    type: counter
+    address: 342
+    unit: "kWh"

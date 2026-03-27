@@ -1,4 +1,5 @@
 use super::*;
+use std::io::Write;
 
 fn minimal_yaml() -> String {
     r#"
@@ -642,4 +643,353 @@ collectors:
       - { name: m, type: gauge, register_type: holding, address: 65535, data_type: u16 }
 "#;
     parse(y).unwrap();
+}
+
+// ===== Metrics files tests =====
+
+fn create_temp_dir() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+fn write_file(dir: &std::path::Path, name: &str, content: &str) -> PathBuf {
+    let path = dir.join(name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    let mut f = std::fs::File::create(&path).unwrap();
+    f.write_all(content.as_bytes()).unwrap();
+    path
+}
+
+#[test]
+fn test_metrics_files_with_defaults() {
+    let dir = create_temp_dir();
+    write_file(
+        dir.path(),
+        "devices/meter.yaml",
+        r#"
+defaults:
+  register_type: holding
+  data_type: f32
+  type: gauge
+metrics:
+  - name: voltage
+    address: 0
+    unit: "V"
+  - name: current
+    address: 6
+    unit: "A"
+"#,
+    );
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "devices/meter.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let config = Config::load(&config_path).unwrap();
+    assert_eq!(config.collectors[0].metrics.len(), 2);
+    let v = &config.collectors[0].metrics[0];
+    assert_eq!(v.name, "voltage");
+    assert_eq!(v.register_type, RegisterType::Holding);
+    assert_eq!(v.data_type, DataType::F32);
+    assert_eq!(v.metric_type, MetricType::Gauge);
+    assert_eq!(v.unit, "V");
+}
+
+#[test]
+fn test_metrics_files_merge_order() {
+    let dir = create_temp_dir();
+    write_file(
+        dir.path(),
+        "base.yaml",
+        r#"
+metrics:
+  - name: voltage
+    type: gauge
+    register_type: holding
+    data_type: f32
+    address: 0
+    unit: "V"
+    description: "base voltage"
+  - name: current
+    type: gauge
+    register_type: holding
+    data_type: f32
+    address: 6
+    unit: "A"
+"#,
+    );
+    write_file(
+        dir.path(),
+        "override.yaml",
+        r#"
+metrics:
+  - name: voltage
+    type: gauge
+    register_type: input
+    data_type: f32
+    address: 100
+    unit: "V"
+"#,
+    );
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "base.yaml"
+      - "override.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let config = Config::load(&config_path).unwrap();
+    assert_eq!(config.collectors[0].metrics.len(), 2);
+    // voltage from override.yaml
+    let v = config.collectors[0]
+        .metrics
+        .iter()
+        .find(|m| m.name == "voltage")
+        .unwrap();
+    assert_eq!(v.register_type, RegisterType::Input);
+    assert_eq!(v.address, 100);
+    // description should be empty (full replacement, not inherited)
+    assert_eq!(v.description, "");
+    // current from base.yaml
+    let c = config.collectors[0]
+        .metrics
+        .iter()
+        .find(|m| m.name == "current")
+        .unwrap();
+    assert_eq!(c.address, 6);
+}
+
+#[test]
+fn test_inline_metrics_override_file() {
+    let dir = create_temp_dir();
+    write_file(
+        dir.path(),
+        "meter.yaml",
+        r#"
+metrics:
+  - name: voltage
+    type: gauge
+    register_type: holding
+    data_type: f32
+    address: 0
+    unit: "V"
+"#,
+    );
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "meter.yaml"
+    metrics:
+      - name: voltage
+        type: gauge
+        register_type: input
+        data_type: u16
+        address: 200
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let config = Config::load(&config_path).unwrap();
+    assert_eq!(config.collectors[0].metrics.len(), 1);
+    let v = &config.collectors[0].metrics[0];
+    assert_eq!(v.register_type, RegisterType::Input);
+    assert_eq!(v.data_type, DataType::U16);
+    assert_eq!(v.address, 200);
+}
+
+#[test]
+fn test_full_replacement_no_field_inheritance() {
+    let dir = create_temp_dir();
+    write_file(
+        dir.path(),
+        "base.yaml",
+        r#"
+metrics:
+  - name: voltage
+    type: gauge
+    register_type: holding
+    data_type: f32
+    address: 0
+    unit: "V"
+    description: "Voltage reading"
+    scale: 0.1
+"#,
+    );
+    write_file(
+        dir.path(),
+        "override.yaml",
+        r#"
+metrics:
+  - name: voltage
+    type: gauge
+    register_type: holding
+    data_type: f32
+    address: 0
+"#,
+    );
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "base.yaml"
+      - "override.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let config = Config::load(&config_path).unwrap();
+    let v = &config.collectors[0].metrics[0];
+    // Full replacement: unit, description, scale revert to defaults
+    assert_eq!(v.unit, "");
+    assert_eq!(v.description, "");
+    assert_eq!(v.scale, 1.0);
+}
+
+#[test]
+fn test_relative_path_resolution() {
+    let dir = create_temp_dir();
+    write_file(
+        dir.path(),
+        "subdir/devices/meter.yaml",
+        r#"
+metrics:
+  - name: voltage
+    type: gauge
+    register_type: holding
+    data_type: u16
+    address: 0
+"#,
+    );
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "subdir/devices/meter.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let config = Config::load(&config_path).unwrap();
+    assert_eq!(config.collectors[0].metrics.len(), 1);
+}
+
+#[test]
+fn test_missing_metrics_file_error() {
+    let dir = create_temp_dir();
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "nonexistent.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let err = Config::load(&config_path).unwrap_err();
+    assert!(
+        err.to_string().contains("reading metrics file"),
+        "got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_empty_metrics_file_error() {
+    let dir = create_temp_dir();
+    write_file(dir.path(), "empty.yaml", "metrics: []\n");
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "empty.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let err = Config::load(&config_path).unwrap_err();
+    assert!(
+        err.to_string().contains("contains no metrics"),
+        "got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_defaults_plus_per_metric_override() {
+    let dir = create_temp_dir();
+    write_file(
+        dir.path(),
+        "meter.yaml",
+        r#"
+defaults:
+  register_type: holding
+  data_type: f32
+  type: gauge
+  byte_order: little_endian
+  scale: 0.1
+metrics:
+  - name: voltage
+    address: 0
+    unit: "V"
+  - name: current
+    address: 6
+    unit: "A"
+    data_type: u32
+    byte_order: big_endian
+    scale: 0.01
+"#,
+    );
+    let config_yaml = r#"
+exporters:
+  prometheus: { enabled: true }
+collectors:
+  - name: test
+    protocol: { type: tcp, endpoint: "localhost:502" }
+    slave_id: 1
+    metrics_files:
+      - "meter.yaml"
+"#;
+    let config_path = write_file(dir.path(), "config.yaml", config_yaml);
+    let config = Config::load(&config_path).unwrap();
+    // voltage gets defaults
+    let v = config.collectors[0]
+        .metrics
+        .iter()
+        .find(|m| m.name == "voltage")
+        .unwrap();
+    assert_eq!(v.data_type, DataType::F32);
+    assert_eq!(v.byte_order, ByteOrder::LittleEndian);
+    assert_eq!(v.scale, 0.1);
+    // current overrides defaults
+    let c = config.collectors[0]
+        .metrics
+        .iter()
+        .find(|m| m.name == "current")
+        .unwrap();
+    assert_eq!(c.data_type, DataType::U32);
+    assert_eq!(c.byte_order, ByteOrder::BigEndian);
+    assert_eq!(c.scale, 0.01);
 }
