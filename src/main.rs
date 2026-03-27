@@ -180,7 +180,20 @@ async fn main() -> Result<()> {
         }
     }
 
-    // 8. Wait for shutdown signal
+    // 8. Start MQTT exporter (if enabled)
+    let mut mqtt_handle = None;
+    if let Some(ref mqtt_cfg) = config.exporters.mqtt {
+        if mqtt_cfg.enabled {
+            let mqtt_cfg = mqtt_cfg.clone();
+            let store = store.clone();
+            let cancel = cancel.clone();
+            mqtt_handle = Some(tokio::spawn(async move {
+                export::mqtt::run_mqtt_exporter(mqtt_cfg, store, cancel).await;
+            }));
+        }
+    }
+
+    // 9. Wait for shutdown signal
     shutdown_signal().await;
     info!("initiating graceful shutdown");
 
@@ -195,6 +208,9 @@ async fn main() -> Result<()> {
         let _ = h.await;
     }
     if let Some(h) = otlp_handle {
+        let _ = h.await;
+    }
+    if let Some(h) = mqtt_handle {
         let _ = h.await;
     }
 

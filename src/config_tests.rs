@@ -1000,3 +1000,140 @@ collectors:
     assert_eq!(c.byte_order, ByteOrder::BigEndian);
     assert_eq!(c.scale, 0.01);
 }
+
+fn mqtt_yaml() -> String {
+    r#"
+exporters:
+  mqtt:
+    enabled: true
+    endpoint: "mqtt://broker.local:1883"
+collectors:
+  - name: test
+    protocol:
+      type: tcp
+      endpoint: "localhost:502"
+    slave_id: 1
+    metrics:
+      - name: voltage
+        type: gauge
+        register_type: holding
+        address: 0
+        data_type: u16
+"#
+    .to_string()
+}
+
+#[test]
+fn test_parse_mqtt_minimal() {
+    let c = parse(&mqtt_yaml()).unwrap();
+    let mqtt = c.exporters.mqtt.unwrap();
+    assert!(mqtt.enabled);
+    assert_eq!(mqtt.endpoint.unwrap(), "mqtt://broker.local:1883");
+    assert_eq!(mqtt.topic_prefix, "modbus/metrics");
+    assert_eq!(mqtt.qos, 1);
+    assert!(!mqtt.retain);
+    assert_eq!(mqtt.interval.as_secs(), 10);
+}
+
+#[test]
+fn test_parse_mqtt_with_tls_auth() {
+    let yaml = r#"
+exporters:
+  mqtt:
+    enabled: true
+    endpoint: "mqtts://broker.local:8883"
+    client_id: "exporter-1"
+    topic_prefix: "plant/metrics"
+    qos: 1
+    retain: true
+    interval: "30s"
+    timeout: "5s"
+    auth:
+      username: user1
+      password: secret
+    tls:
+      ca_cert: /certs/ca.pem
+      client_cert: /certs/client.pem
+      client_key: /certs/client.key
+      insecure: false
+collectors:
+  - name: test
+    protocol:
+      type: tcp
+      endpoint: "localhost:502"
+    slave_id: 1
+    metrics:
+      - name: voltage
+        type: gauge
+        register_type: holding
+        address: 0
+        data_type: u16
+"#;
+    let c = parse(yaml).unwrap();
+    let mqtt = c.exporters.mqtt.unwrap();
+    assert_eq!(mqtt.endpoint.unwrap(), "mqtts://broker.local:8883");
+    assert_eq!(mqtt.client_id.unwrap(), "exporter-1");
+    assert_eq!(mqtt.topic_prefix, "plant/metrics");
+    assert_eq!(mqtt.qos, 1);
+    assert!(mqtt.retain);
+    assert_eq!(mqtt.interval.as_secs(), 30);
+    let auth = mqtt.auth.unwrap();
+    assert_eq!(auth.username, "user1");
+    let tls = mqtt.tls.unwrap();
+    assert_eq!(tls.ca_cert.unwrap(), "/certs/ca.pem");
+    assert!(!tls.insecure);
+}
+
+#[test]
+fn test_mqtt_missing_endpoint() {
+    let yaml = r#"
+exporters:
+  mqtt:
+    enabled: true
+collectors:
+  - name: test
+    protocol:
+      type: tcp
+      endpoint: "localhost:502"
+    slave_id: 1
+    metrics:
+      - name: voltage
+        type: gauge
+        register_type: holding
+        address: 0
+        data_type: u16
+"#;
+    let err = parse(yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("mqtt exporter is enabled but no endpoint"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_mqtt_invalid_qos() {
+    let yaml = r#"
+exporters:
+  mqtt:
+    enabled: true
+    endpoint: "mqtt://broker:1883"
+    qos: 3
+collectors:
+  - name: test
+    protocol:
+      type: tcp
+      endpoint: "localhost:502"
+    slave_id: 1
+    metrics:
+      - name: voltage
+        type: gauge
+        register_type: holding
+        address: 0
+        data_type: u16
+"#;
+    let err = parse(yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("mqtt qos must be 0, 1, or 2"),
+        "got: {err:?}"
+    );
+}
