@@ -73,9 +73,7 @@ impl InternalMetrics {
 
     /// Get or create stats for a collector.
     pub fn get_or_create_collector(&self, name: &str) -> dashmap::mapref::one::Ref<'_, String, CollectorStats> {
-        if !self.collector_stats.contains_key(name) {
-            self.collector_stats.entry(name.to_string()).or_insert_with(CollectorStats::new);
-        }
+        self.collector_stats.entry(name.to_string()).or_insert_with(CollectorStats::new);
         self.collector_stats.get(name).unwrap()
     }
 

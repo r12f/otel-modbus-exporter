@@ -207,6 +207,14 @@ async fn run_collector(
         }
 
         if connection_error {
+            // Record error metrics before reconnecting
+            if let Some(ref im) = internal_metrics {
+                let elapsed_secs = start.elapsed().as_secs_f64();
+                let stats = im.get_or_create_collector(&collector.name);
+                stats.set_poll_duration(elapsed_secs);
+                stats.polls_error.fetch_add(1, Relaxed);
+            }
+
             // Reconnect with backoff
             loop {
                 let _ = client.disconnect().await;
