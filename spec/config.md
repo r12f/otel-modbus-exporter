@@ -90,7 +90,7 @@ Metrics files allow reusable metric definitions across multiple collectors with 
 #### File Path Resolution
 
 Relative paths are resolved against the **config file's parent directory**.
-Example: config at `/etc/otel-modbus-exporter/config.yaml` + `metrics_files: ["devices/sdm630.yaml"]` → `/etc/otel-modbus-exporter/devices/sdm630.yaml`.
+Example: config at `/etc/modbus-exporter/config.yaml` + `metrics_files: ["devices/sdm630.yaml"]` → `/etc/modbus-exporter/devices/sdm630.yaml`.
 Absolute paths are used as-is.
 
 #### File Format

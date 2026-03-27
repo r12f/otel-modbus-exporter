@@ -9,7 +9,7 @@
 ## Architecture
 
 ```
-oitc/modbus-server (simulator) → otel-modbus-exporter → Prometheus /metrics → test assertions
+oitc/modbus-server (simulator) → modbus-exporter → Prometheus /metrics → test assertions
 ```
 
 ## docker-compose.test.yml
@@ -17,7 +17,7 @@ oitc/modbus-server (simulator) → otel-modbus-exporter → Prometheus /metrics 
 Two services:
 
 1. **`modbus-simulator`** — uses `oitc/modbus-server` image with a JSON config (`config/modbus-simulator.json`) that pre-loads known register values (holding and input registers with deterministic values).
-2. **`otel-modbus-exporter`** — built from the local Dockerfile, configured via `config/test.yaml` pointing to `modbus-simulator:5020`. Prometheus endpoint enabled, OTLP disabled.
+2. **`modbus-exporter`** — built from the local Dockerfile, configured via `config/test.yaml` pointing to `modbus-simulator:5020`. Prometheus endpoint enabled, OTLP disabled.
 
 ## Test Config
 

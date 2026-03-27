@@ -38,7 +38,7 @@ collectors:
     )
     .unwrap();
 
-    let config = otel_modbus_exporter::config::Config::load(&path);
+    let config = modbus_exporter::config::Config::load(&path);
     assert!(config.is_ok(), "valid config should load: {config:?}");
     let config = config.unwrap();
     assert_eq!(config.collectors.len(), 1);
@@ -77,7 +77,7 @@ collectors:
     )
     .unwrap();
 
-    let result = otel_modbus_exporter::config::Config::load(&path);
+    let result = modbus_exporter::config::Config::load(&path);
     assert!(result.is_err(), "should fail: no exporter enabled");
 }
 
@@ -85,14 +85,14 @@ collectors:
 
 #[test]
 fn metric_store_publish_and_read() {
-    let store = otel_modbus_exporter::metrics::MetricStore::new();
+    let store = modbus_exporter::metrics::MetricStore::new();
     let global = BTreeMap::from([("env".to_string(), "test".to_string())]);
     let collector_labels = BTreeMap::new();
 
-    let metric = otel_modbus_exporter::metrics::MetricValue {
+    let metric = modbus_exporter::metrics::MetricValue {
         name: "temp".to_string(),
         value: 22.5,
-        metric_type: otel_modbus_exporter::metrics::MetricType::Gauge,
+        metric_type: modbus_exporter::metrics::MetricType::Gauge,
         labels: BTreeMap::from([("sensor".to_string(), "s1".to_string())]),
         description: "Temperature".to_string(),
         unit: "C".to_string(),
@@ -113,10 +113,10 @@ fn metric_store_publish_and_read() {
 fn decoder_u16_roundtrip() {
     let value = 12345u16;
     let registers = [value];
-    let result = otel_modbus_exporter::decoder::decode(
+    let result = modbus_exporter::decoder::decode(
         &registers,
-        otel_modbus_exporter::decoder::DataType::U16,
-        otel_modbus_exporter::decoder::ByteOrder::BigEndian,
+        modbus_exporter::decoder::DataType::U16,
+        modbus_exporter::decoder::ByteOrder::BigEndian,
         1.0,
         0.0,
     )
@@ -128,10 +128,10 @@ fn decoder_u16_roundtrip() {
 fn decoder_i16_negative() {
     let value = (-100i16) as u16;
     let registers = [value];
-    let result = otel_modbus_exporter::decoder::decode(
+    let result = modbus_exporter::decoder::decode(
         &registers,
-        otel_modbus_exporter::decoder::DataType::I16,
-        otel_modbus_exporter::decoder::ByteOrder::BigEndian,
+        modbus_exporter::decoder::DataType::I16,
+        modbus_exporter::decoder::ByteOrder::BigEndian,
         1.0,
         0.0,
     )
@@ -146,10 +146,10 @@ fn decoder_f32_big_endian() {
     let r0 = u16::from_be_bytes([bytes[0], bytes[1]]);
     let r1 = u16::from_be_bytes([bytes[2], bytes[3]]);
     let registers = [r0, r1];
-    let result = otel_modbus_exporter::decoder::decode(
+    let result = modbus_exporter::decoder::decode(
         &registers,
-        otel_modbus_exporter::decoder::DataType::F32,
-        otel_modbus_exporter::decoder::ByteOrder::BigEndian,
+        modbus_exporter::decoder::DataType::F32,
+        modbus_exporter::decoder::ByteOrder::BigEndian,
         1.0,
         0.0,
     )
@@ -160,10 +160,10 @@ fn decoder_f32_big_endian() {
 #[test]
 fn decoder_with_scale_and_offset() {
     let registers = [100u16];
-    let result = otel_modbus_exporter::decoder::decode(
+    let result = modbus_exporter::decoder::decode(
         &registers,
-        otel_modbus_exporter::decoder::DataType::U16,
-        otel_modbus_exporter::decoder::ByteOrder::BigEndian,
+        modbus_exporter::decoder::DataType::U16,
+        modbus_exporter::decoder::ByteOrder::BigEndian,
         0.1,
         -10.0,
     )
@@ -175,10 +175,10 @@ fn decoder_with_scale_and_offset() {
 #[test]
 fn decoder_insufficient_registers() {
     let registers = [1u16]; // need 2 for u32
-    let result = otel_modbus_exporter::decoder::decode(
+    let result = modbus_exporter::decoder::decode(
         &registers,
-        otel_modbus_exporter::decoder::DataType::U32,
-        otel_modbus_exporter::decoder::ByteOrder::BigEndian,
+        modbus_exporter::decoder::DataType::U32,
+        modbus_exporter::decoder::ByteOrder::BigEndian,
         1.0,
         0.0,
     );

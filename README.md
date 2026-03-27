@@ -1,4 +1,4 @@
-# otel-modbus-exporter
+# modbus-exporter
 
 An OpenTelemetry-native Modbus exporter that polls Modbus RTU and TCP devices and exports metrics via OTLP (protobuf/HTTP) and Prometheus scrape endpoint.
 
@@ -112,10 +112,10 @@ make clean          # cargo clean
 
 ```bash
 docker run -d \
-  -v /path/to/config.yaml:/etc/otel-modbus-exporter/config.yaml:ro \
+  -v /path/to/config.yaml:/etc/modbus-exporter/config.yaml:ro \
   -p 9090:9090 \
   --device /dev/ttyUSB0:/dev/ttyUSB0 \
-  r12f/otel-modbus-exporter:latest
+  r12f/modbus-exporter:latest
 ```
 
 For TCP-only collectors, the `--device` flag is not needed.

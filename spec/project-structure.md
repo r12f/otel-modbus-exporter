@@ -3,7 +3,7 @@
 ## Planned File Tree
 
 ```
-otel-modbus-exporter/
+modbus-exporter/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml

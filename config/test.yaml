@@ -1,4 +1,4 @@
-# otel-modbus-exporter test configuration
+# modbus-exporter test configuration
 # Used by E2E tests with oitc/modbus-server simulator
 
 global_labels:

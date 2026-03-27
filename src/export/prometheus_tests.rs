@@ -34,16 +34,13 @@ fn test_sanitize_name() {
 fn test_build_metric_name_with_unit() {
     assert_eq!(
         build_metric_name("voltage", "volts"),
-        "otel_modbus_voltage_volts"
+        "modbus_voltage_volts"
     );
 }
 
 #[test]
 fn test_build_metric_name_without_unit() {
-    assert_eq!(
-        build_metric_name("temperature", ""),
-        "otel_modbus_temperature"
-    );
+    assert_eq!(build_metric_name("temperature", ""), "modbus_temperature");
 }
 
 #[test]
@@ -75,9 +72,9 @@ fn test_render_metrics_gauge() {
     );
 
     let output = render_metrics(&store);
-    assert!(output.contains("# HELP otel_modbus_voltage_volts Phase voltage"));
-    assert!(output.contains("# TYPE otel_modbus_voltage_volts gauge"));
-    assert!(output.contains("otel_modbus_voltage_volts{"));
+    assert!(output.contains("# HELP modbus_voltage_volts Phase voltage"));
+    assert!(output.contains("# TYPE modbus_voltage_volts gauge"));
+    assert!(output.contains("modbus_voltage_volts{"));
     assert!(output.contains("230.5"));
 }
 
@@ -95,7 +92,7 @@ fn test_render_metrics_counter() {
     store.publish("c1", vec![m], &BTreeMap::new(), &BTreeMap::new());
 
     let output = render_metrics(&store);
-    assert!(output.contains("# TYPE otel_modbus_requests counter"));
+    assert!(output.contains("# TYPE modbus_requests counter"));
 }
 
 #[test]
@@ -168,6 +165,6 @@ async fn test_http_endpoint() {
         .to_string();
     assert!(ct.contains("text/plain"));
     let body = resp.text().await.unwrap();
-    assert!(body.contains("otel_modbus_temp_celsius"));
+    assert!(body.contains("modbus_temp_celsius"));
     assert!(body.contains("22.5"));
 }

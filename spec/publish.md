@@ -58,8 +58,8 @@ on:
     push: true
     platforms: linux/amd64,linux/arm64
     tags: |
-      r12f/otel-modbus-exporter:vX.Y.Z
-      r12f/otel-modbus-exporter:latest
+      r12f/modbus-exporter:vX.Y.Z
+      r12f/modbus-exporter:latest
 ```
 
 #### 4. GitHub Release

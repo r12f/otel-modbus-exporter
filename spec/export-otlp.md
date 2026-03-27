@@ -18,7 +18,7 @@ Exports metrics to an OpenTelemetry Collector via OTLP protobuf over HTTP (POST 
 - Export runs on a fixed interval (10s default, tied to the fastest collector interval).
 - Each export sends ALL current metric values in a single `ExportMetricsServiceRequest`.
 - One `ResourceMetrics` with resource attributes from `global_labels`.
-- One `ScopeMetrics` with scope name `otel-modbus-exporter`.
+- One `ScopeMetrics` with scope name `modbus-exporter`.
 - One `Metric` entry per metric, containing a single data point.
 
 ## Metric Mapping

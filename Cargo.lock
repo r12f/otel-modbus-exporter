@@ -1012,6 +1012,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "modbus-exporter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.8",
+ "bytes",
+ "clap",
+ "dashmap",
+ "futures",
+ "humantime-serde",
+ "indexmap 2.13.0",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "prometheus-client",
+ "reqwest",
+ "serde",
+ "serde_yaml",
+ "tempfile",
+ "tokio",
+ "tokio-modbus",
+ "tokio-serial",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "nix"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1117,35 +1146,6 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tracing",
-]
-
-[[package]]
-name = "otel-modbus-exporter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.8.8",
- "bytes",
- "clap",
- "dashmap",
- "futures",
- "humantime-serde",
- "indexmap 2.13.0",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "prometheus-client",
- "reqwest",
- "serde",
- "serde_yaml",
- "tempfile",
- "tokio",
- "tokio-modbus",
- "tokio-serial",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

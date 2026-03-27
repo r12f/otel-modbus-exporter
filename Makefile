@@ -16,7 +16,7 @@ test:
 	cargo test
 
 docker:
-	docker buildx build --platform linux/amd64,linux/arm64 -t otel-modbus-exporter .
+	docker buildx build --platform linux/amd64,linux/arm64 -t modbus-exporter .
 
 e2e:  ## Run E2E tests with docker-compose
 	bash tests/e2e/run.sh

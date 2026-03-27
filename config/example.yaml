@@ -1,4 +1,4 @@
-# otel-modbus-exporter configuration example
+# modbus-exporter configuration example
 # See spec/config.md for full schema documentation.
 
 global_labels:

@@ -31,14 +31,14 @@ fn sanitize_name(s: &str) -> String {
     out
 }
 
-/// Build the fully-qualified metric name: `otel_modbus_{name}[_{unit}]`.
+/// Build the fully-qualified metric name: `modbus_{name}[_{unit}]`.
 fn build_metric_name(name: &str, unit: &str) -> String {
     let sname = sanitize_name(name);
     if unit.is_empty() {
-        format!("otel_modbus_{sname}")
+        format!("modbus_{sname}")
     } else {
         let sunit = sanitize_name(unit);
-        format!("otel_modbus_{sname}_{sunit}")
+        format!("modbus_{sname}_{sunit}")
     }
 }
 

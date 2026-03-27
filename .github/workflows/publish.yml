@@ -79,8 +79,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            r12f/otel-modbus-exporter:v${{ steps.bump.outputs.version }}
-            r12f/otel-modbus-exporter:latest
+            r12f/modbus-exporter:v${{ steps.bump.outputs.version }}
+            r12f/modbus-exporter:latest
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

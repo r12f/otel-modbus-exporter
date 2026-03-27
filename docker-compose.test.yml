@@ -12,12 +12,12 @@ services:
       retries: 10
       start_period: 5s
 
-  otel-modbus-exporter:
+  modbus-exporter:
     build:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ./config/test.yaml:/etc/otel-modbus-exporter/config.yaml:ro
+      - ./config/test.yaml:/etc/modbus-exporter/config.yaml:ro
     ports:
       - "9090:9090"
     depends_on:

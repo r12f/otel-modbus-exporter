@@ -15,7 +15,7 @@ An HTTP server (using `axum`) serves a Prometheus-compatible `/metrics` endpoint
 
 ## Metric Naming
 
-- Metric names are formatted as: `otel_modbus_{metric_name}_{unit}` (if unit is non-empty) or `otel_modbus_{metric_name}`.
+- Metric names are formatted as: `modbus_{metric_name}_{unit}` (if unit is non-empty) or `modbus_{metric_name}`.
 - All names are snake_case.
 - Invalid characters replaced with `_`.
 - Unit suffixes follow Prometheus conventions (e.g., `_volts`, `_kilowatt_hours`, `_celsius`).
@@ -37,9 +37,9 @@ An HTTP server (using `axum`) serves a Prometheus-compatible `/metrics` endpoint
 
 Each metric includes:
 ```
-# HELP otel_modbus_voltage_phase_a_volts Phase A voltage
-# TYPE otel_modbus_voltage_phase_a_volts gauge
-otel_modbus_voltage_phase_a_volts{collector="power-meter-01",building="A",floor="2"} 23.1
+# HELP modbus_voltage_phase_a_volts Phase A voltage
+# TYPE modbus_voltage_phase_a_volts gauge
+modbus_voltage_phase_a_volts{collector="power-meter-01",building="A",floor="2"} 23.1
 ```
 
 ## Configuration
