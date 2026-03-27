@@ -1,0 +1,18 @@
+# Example configuration for otel-modbus-exporter
+# See spec/config.md for full schema documentation.
+
+exporters:
+  prometheus:
+    enabled: true
+    listen: "0.0.0.0:9090"
+
+collectors:
+  - name: example
+    endpoint: "tcp://localhost:502"
+    unit_id: 1
+    poll_interval: "10s"
+    registers:
+      - address: 0
+        type: holding
+        name: temperature
+        data_type: float32
