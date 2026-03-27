@@ -97,37 +97,37 @@ echo ""
 echo "==> Asserting metrics..."
 
 # Check metric existence
-assert_metric_exists "voltage_phase_a"
-assert_metric_exists "total_energy"
-assert_metric_exists "temperature"
-assert_metric_exists "frequency"
-assert_metric_exists "total_energy_mid"
+assert_metric_exists "otel_modbus_voltage_phase_a_V"
+assert_metric_exists "otel_modbus_total_energy_kWh"
+assert_metric_exists "otel_modbus_temperature_C"
+assert_metric_exists "otel_modbus_frequency_Hz"
+assert_metric_exists "otel_modbus_total_energy_mid_kWh"
 
 # Check types
-assert_type "voltage_phase_a" "gauge"
-assert_type "total_energy" "counter"
-assert_type "temperature" "gauge"
-assert_type "frequency" "gauge"
-assert_type "total_energy_mid" "counter"
+assert_type "otel_modbus_voltage_phase_a_V" "gauge"
+assert_type "otel_modbus_total_energy_kWh" "counter"
+assert_type "otel_modbus_temperature_C" "gauge"
+assert_type "otel_modbus_frequency_Hz" "gauge"
+assert_type "otel_modbus_total_energy_mid_kWh" "counter"
 
 # Check global labels
-assert_label "voltage_phase_a" 'env="test"'
-assert_label "voltage_phase_a" 'site="e2e"'
+assert_label "otel_modbus_voltage_phase_a_V" 'env="test"'
+assert_label "otel_modbus_voltage_phase_a_V" 'site="e2e"'
 
 # Check collector labels
-assert_label "voltage_phase_a" 'device="simulator"'
+assert_label "otel_modbus_voltage_phase_a_V" 'device="simulator"'
 
 # Check metric values (deterministic simulator registers + scale/offset)
 # voltage_phase_a: register 0 = 2300 (u16), scale=0.1, offset=0.0 → 230.0
-assert_value "voltage_phase_a" 230.0
+assert_value "otel_modbus_voltage_phase_a_V" 230.0
 # total_energy: registers 16,17 = (1<<16)|24464 = 90000 (u32), scale=0.01, offset=0.0 → 900.0
-assert_value "total_energy" 900.0
+assert_value "otel_modbus_total_energy_kWh" 900.0
 # temperature: register 0 = 65436 (i16 = -100), scale=0.1, offset=40.0 → -10.0+40.0 = 30.0
-assert_value "temperature" 30.0
+assert_value "otel_modbus_temperature_C" 30.0
 # frequency: registers 32,33 = 0x43480000 (f32 = 200.0), scale=1.0, offset=0.0 → 200.0
-assert_value "frequency" 200.0
+assert_value "otel_modbus_frequency_Hz" 200.0
 # total_energy_mid: registers 48,49 mid-big = same value 90000 (u32), scale=0.01 → 900.0
-assert_value "total_energy_mid" 900.0
+assert_value "otel_modbus_total_energy_mid_kWh" 900.0
 
 echo ""
 echo "==> Testing graceful shutdown..."
