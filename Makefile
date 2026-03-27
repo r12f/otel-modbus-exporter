@@ -18,8 +18,8 @@ test:
 docker:
 	docker buildx build --platform linux/amd64,linux/arm64 -t otel-modbus-exporter .
 
-e2e:
-	docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+e2e:  ## Run E2E tests with docker-compose
+	bash tests/e2e/run.sh
 
 clean:
 	cargo clean

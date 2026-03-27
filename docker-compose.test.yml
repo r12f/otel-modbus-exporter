@@ -1,0 +1,24 @@
+services:
+  modbus-simulator:
+    image: oitc/modbus-server
+    volumes:
+      - ./config/modbus-simulator.json:/etc/modbus/config.json:ro
+    ports:
+      - "5020:5020"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 5020 || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  otel-modbus-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./config/test.yaml:/etc/otel-modbus-exporter/config.yaml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      modbus-simulator:
+        condition: service_healthy
