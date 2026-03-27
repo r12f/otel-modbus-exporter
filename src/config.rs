@@ -97,6 +97,8 @@ pub struct Exporters {
     pub otlp: Option<OtlpExporter>,
     #[serde(default)]
     pub prometheus: Option<PrometheusExporter>,
+    #[serde(default)]
+    pub mqtt: Option<MqttExporter>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -138,6 +140,60 @@ fn default_prom_listen() -> String {
 }
 fn default_prom_path() -> String {
     "/metrics".to_string()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MqttExporter {
+    #[serde(default)]
+    pub enabled: bool,
+    pub endpoint: Option<String>,
+    pub client_id: Option<String>,
+    #[serde(default = "default_mqtt_topic_prefix")]
+    pub topic_prefix: String,
+    pub auth: Option<MqttAuth>,
+    pub tls: Option<MqttTls>,
+    #[serde(default = "default_mqtt_qos")]
+    pub qos: u8,
+    #[serde(default)]
+    pub retain: bool,
+    #[serde(default = "default_mqtt_interval", with = "humantime_serde")]
+    pub interval: Duration,
+    #[serde(default = "default_mqtt_timeout", with = "humantime_serde")]
+    pub timeout: Duration,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MqttAuth {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MqttTls {
+    pub ca_cert: Option<String>,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
+    #[serde(default)]
+    pub insecure: bool,
+}
+
+fn default_mqtt_topic_prefix() -> String {
+    "modbus/metrics".to_string()
+}
+
+fn default_mqtt_qos() -> u8 {
+    0
+}
+
+fn default_mqtt_interval() -> Duration {
+    Duration::from_secs(10)
+}
+
+fn default_mqtt_timeout() -> Duration {
+    Duration::from_secs(10)
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -493,12 +549,28 @@ impl Config {
             .prometheus
             .as_ref()
             .is_some_and(|e| e.enabled);
-        if !otlp_on && !prom_on {
+        let mqtt_on = self.exporters.mqtt.as_ref().is_some_and(|e| e.enabled);
+        if !otlp_on && !prom_on && !mqtt_on {
             bail!("at least one exporter must be enabled");
         }
         if let Some(otlp) = &self.exporters.otlp {
             if otlp.enabled && otlp.endpoint.is_none() {
                 bail!("otlp exporter is enabled but no endpoint is set");
+            }
+        }
+        if let Some(mqtt) = &self.exporters.mqtt {
+            if mqtt.enabled {
+                match &mqtt.endpoint {
+                    None => bail!("mqtt exporter is enabled but no endpoint is set"),
+                    Some(ep) => {
+                        if !ep.starts_with("mqtt://") && !ep.starts_with("mqtts://") {
+                            bail!("mqtt endpoint must start with mqtt:// or mqtts://");
+                        }
+                    }
+                }
+            }
+            if mqtt.qos > 2 {
+                bail!("mqtt qos must be 0, 1, or 2, got {}", mqtt.qos);
             }
         }
         if self.collectors.is_empty() {

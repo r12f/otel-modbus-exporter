@@ -38,6 +38,39 @@ See [`config/example.yaml`](../config/example.yaml) for a complete annotated exa
 | `listen` | `string` | No | `"0.0.0.0:9090"` | Listen address |
 | `path` | `string` | No | `"/metrics"` | Metrics path |
 
+#### `exporters.mqtt`
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | `bool` | No | `false` | Enable MQTT export |
+| `endpoint` | `string` | Yes (if enabled) | — | Broker URL (`mqtt://host:port` or `mqtts://host:port`) |
+| `client_id` | `string` | No | auto-generated | MQTT client identifier |
+| `topic_prefix` | `string` | No | `"modbus/metrics"` | Base topic prefix |
+| `auth` | `MqttAuth` | No | — | Authentication credentials |
+| `tls` | `MqttTls` | No | — | TLS configuration (for `mqtts://`) |
+| `qos` | `u8` | No | `1` | QoS level: `0`, `1`, or `2` |
+| `retain` | `bool` | No | `false` | Retain flag on metric messages |
+| `interval` | `string` | No | `"10s"` | Publish interval (duration string) |
+| `timeout` | `string` | No | `"5s"` | Connection/publish timeout |
+
+##### `exporters.mqtt.auth`
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `username` | `string` | Yes | — | MQTT username |
+| `password` | `string` | Yes | — | MQTT password |
+
+##### `exporters.mqtt.tls`
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ca_cert` | `string` | No | system roots | Path to CA certificate |
+| `client_cert` | `string` | No | — | Path to client certificate (mutual TLS) |
+| `client_key` | `string` | No | — | Path to client private key (mutual TLS) |
+| `insecure` | `bool` | No | `false` | Skip server certificate verification |
+
+See [export-mqtt.md](export-mqtt.md) for full MQTT export specification.
+
 ### Collector
 
 | Field | Type | Required | Default | Description |
