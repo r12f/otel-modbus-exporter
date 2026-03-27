@@ -6,10 +6,11 @@ services:
     ports:
       - "5020:5020"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 5020 || exit 1"]
+      test: ["CMD-SHELL", "python3 -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 5020)); s.close()'"]
       interval: 2s
       timeout: 5s
       retries: 10
+      start_period: 5s
 
   otel-modbus-exporter:
     build:
