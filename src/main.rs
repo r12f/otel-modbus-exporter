@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 mod config;
 mod decoder;
+pub mod metrics;
 mod modbus;
 
 use clap::Parser;
