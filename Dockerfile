@@ -7,10 +7,9 @@ WORKDIR /src
 COPY . .
 RUN cargo build --release
 
-FROM alpine:latest
+FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /src/target/release/otel-modbus-exporter /usr/local/bin/
-COPY config/example.yaml /etc/otel-modbus-exporter/config.yaml
 EXPOSE 9090
 HEALTHCHECK CMD wget -q -O /dev/null http://localhost:9090/metrics || exit 1
 ENTRYPOINT ["otel-modbus-exporter"]

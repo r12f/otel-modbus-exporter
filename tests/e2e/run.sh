@@ -73,6 +73,26 @@ assert_label() {
   fi
 }
 
+assert_value() {
+  local name="$1"
+  local expected="$2"
+  local tolerance="${3:-0.01}"
+  # Extract the numeric value from the last field of the metric line
+  local actual
+  actual=$(echo "$METRICS" | grep "^${name}{" | head -1 | awk '{print $NF}')
+  if [ -z "$actual" ]; then
+    echo "  FAIL: '${name}' value not found"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  if awk "BEGIN { diff = $actual - $expected; if (diff < 0) diff = -diff; exit !(diff <= $tolerance) }"; then
+    echo "  PASS: '${name}' value=${actual} (expected=${expected} ±${tolerance})"
+  else
+    echo "  FAIL: '${name}' value=${actual} (expected=${expected} ±${tolerance})"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 echo ""
 echo "==> Asserting metrics..."
 
@@ -96,6 +116,18 @@ assert_label "voltage_phase_a" 'site="e2e"'
 
 # Check collector labels
 assert_label "voltage_phase_a" 'device="simulator"'
+
+# Check metric values (deterministic simulator registers + scale/offset)
+# voltage_phase_a: register 0 = 2300 (u16), scale=0.1, offset=0.0 → 230.0
+assert_value "voltage_phase_a" 230.0
+# total_energy: registers 16,17 = (1<<16)|24464 = 90000 (u32), scale=0.01, offset=0.0 → 900.0
+assert_value "total_energy" 900.0
+# temperature: register 0 = 65436 (i16 = -100), scale=0.1, offset=40.0 → -10.0+40.0 = 30.0
+assert_value "temperature" 30.0
+# frequency: registers 32,33 = 0x43480000 (f32 = 200.0), scale=1.0, offset=0.0 → 200.0
+assert_value "frequency" 200.0
+# total_energy_mid: registers 48,49 mid-big = same value 90000 (u32), scale=0.01 → 900.0
+assert_value "total_energy_mid" 900.0
 
 echo ""
 echo "==> Testing graceful shutdown..."
