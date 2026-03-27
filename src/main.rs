@@ -1,4 +1,5 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
+mod decoder;
 mod modbus;
 
 fn main() {
