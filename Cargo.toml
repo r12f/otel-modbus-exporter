@@ -3,6 +3,11 @@ name = "modbus-exporter"
 version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
+description = "A Modbus RTU/TCP to OpenTelemetry metrics exporter with Prometheus scrape endpoint"
+repository = "https://github.com/r12f/modbus-exporter"
+homepage = "https://github.com/r12f/modbus-exporter"
+keywords = ["modbus", "opentelemetry", "prometheus", "metrics", "exporter"]
+categories = ["network-programming"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
