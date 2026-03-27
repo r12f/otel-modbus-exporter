@@ -1,15 +1,27 @@
 {
-  "port": 5020,
-  "holding_registers": {
-    "0": 2300,
-    "16": 1,
-    "17": 24464,
-    "32": 17224,
-    "33": 0,
-    "48": 24464,
-    "49": 1
+  "server": {
+    "listenerAddress": "0.0.0.0",
+    "listenerPort": 5020,
+    "logging": {
+      "logLevel": "INFO"
+    }
   },
-  "input_registers": {
-    "0": 65436
+  "registers": {
+    "zeroMode": false,
+    "initializeUndefinedRegisters": true,
+    "holdingRegister": {
+      "0": 2300,
+      "16": 1,
+      "17": 24464,
+      "32": 17224,
+      "33": 0,
+      "48": 24464,
+      "49": 1
+    },
+    "inputRegister": {
+      "0": 65436
+    },
+    "coils": {},
+    "discreteInput": {}
   }
 }
