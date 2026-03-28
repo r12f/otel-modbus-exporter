@@ -209,5 +209,5 @@ impl super::MetricExporter for PrometheusMetricExporter {
 }
 
 #[cfg(test)]
-#[path = "prometheus_tests.rs"]
+#[path = "mod_tests.rs"]
 mod tests;

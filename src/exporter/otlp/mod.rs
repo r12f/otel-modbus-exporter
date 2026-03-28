@@ -582,5 +582,5 @@ impl super::MetricExporter for OtlpMetricExporter {
 }
 
 #[cfg(test)]
-#[path = "otlp_tests.rs"]
+#[path = "mod_tests.rs"]
 mod tests;

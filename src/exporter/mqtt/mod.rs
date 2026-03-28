@@ -329,5 +329,5 @@ impl super::MetricExporter for MqttMetricExporter {
 }
 
 #[cfg(test)]
-#[path = "mqtt_tests.rs"]
+#[path = "mod_tests.rs"]
 mod tests;
