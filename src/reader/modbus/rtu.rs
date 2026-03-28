@@ -14,7 +14,7 @@ use super::{
 ///
 /// RTU operates over a half-duplex serial bus. All read methods take
 /// `&mut self`, which prevents concurrent access at compile time. Do **not**
-/// place an `ModbusRtuMetricReader` behind a shared-mutable wrapper unless the wrapper
+/// place a `ModbusRtuMetricReader` behind a shared-mutable wrapper unless the wrapper
 /// holds the lock for the entire request–response cycle.
 pub struct ModbusRtuMetricReader {
     builder: SerialPortBuilder,

@@ -68,7 +68,7 @@ pub trait BusConnection: Send {
 /// All methods take `&mut self`, which guarantees at the type level that only
 /// one operation is in-flight at a time. This is **required** for RTU
 /// (half-duplex serial) transports where concurrent bus access would corrupt
-/// frames. Callers must not wrap an `ModbusRtuMetricReader` in shared-mutable containers
+/// frames. Callers must not wrap a `ModbusRtuMetricReader` in shared-mutable containers
 /// (`Arc<Mutex<_>>` is acceptable only if the critical section spans the
 /// entire request–response cycle).
 #[async_trait]
