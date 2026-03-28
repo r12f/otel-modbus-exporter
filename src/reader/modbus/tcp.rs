@@ -6,12 +6,14 @@ use tokio_modbus::Slave;
 use super::{
     validate_coil_count, validate_register_count, BusConnection, ModbusReader, READ_TIMEOUT,
 };
+use crate::config::MetricConfig;
 
 /// Modbus TCP metric reader.
 pub struct ModbusTcpMetricReader {
     endpoint: String,
     slave_id: u8,
     context: Option<ModbusContext>,
+    metrics: Vec<MetricConfig>,
 }
 
 impl ModbusTcpMetricReader {
@@ -21,6 +23,7 @@ impl ModbusTcpMetricReader {
             endpoint,
             slave_id,
             context: None,
+            metrics: Vec::new(),
         }
     }
 
@@ -132,6 +135,11 @@ impl ModbusReader for ModbusTcpMetricReader {
 
 #[async_trait]
 impl crate::reader::MetricReader for ModbusTcpMetricReader {
+    fn set_metrics(&mut self, metrics: Vec<MetricConfig>) {
+        crate::reader::warn_duplicate_metric_names(&metrics);
+        self.metrics = metrics;
+    }
+
     async fn connect(&mut self) -> Result<()> {
         BusConnection::connect(self).await
     }
@@ -144,25 +152,23 @@ impl crate::reader::MetricReader for ModbusTcpMetricReader {
         BusConnection::is_connected(self)
     }
 
-    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
-        crate::reader::ReaderCapabilities { batch_read: true }
-    }
-
-    async fn read(&mut self, metric: &crate::config::MetricConfig) -> Result<f64> {
-        super::read_modbus_metric(self, metric).await
-    }
-
-    async fn batch_read<'a>(
+    async fn read(
         &mut self,
-        metrics: &'a [crate::config::MetricConfig],
-    ) -> crate::reader::BatchReadResult<'a> {
-        let super::batch::BatchReadResult {
-            results,
-            read_count,
-        } = super::batch::batch_read_coalesced(self, metrics).await;
-        crate::reader::BatchReadResult {
-            results,
-            read_count,
+        _cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::reader::ReadResults {
+        // Temporarily take metrics to avoid cloning; restore after read.
+        let metrics = std::mem::take(&mut self.metrics);
+        let batch = super::batch::batch_read_coalesced(self, &metrics).await;
+        let io_count = batch.read_count;
+        let map = batch
+            .results
+            .into_iter()
+            .map(|(m, r)| (m.name.clone(), r))
+            .collect();
+        self.metrics = metrics;
+        crate::reader::ReadResults {
+            metrics: map,
+            io_count,
         }
     }
 }

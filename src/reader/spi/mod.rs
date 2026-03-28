@@ -103,6 +103,7 @@ pub struct SpiMetricReader {
     device_path: String,
     connected: bool,
     device_lock: DeviceLock,
+    metrics: Vec<config::MetricConfig>,
 }
 
 /// Per-device mutex map for serializing access to same chip-select.
@@ -124,6 +125,7 @@ impl SpiMetricReader {
             device_path,
             connected: false,
             device_lock,
+            metrics: Vec::new(),
         }
     }
 
@@ -188,6 +190,11 @@ pub async fn read_spi_metric(
 /// Unified MetricReader implementation for SPI.
 #[async_trait]
 impl crate::reader::MetricReader for SpiMetricReader {
+    fn set_metrics(&mut self, metrics: Vec<config::MetricConfig>) {
+        crate::reader::warn_duplicate_metric_names(&metrics);
+        self.metrics = metrics;
+    }
+
     async fn connect(&mut self) -> Result<()> {
         self.connected = true;
         Ok(())
@@ -202,12 +209,25 @@ impl crate::reader::MetricReader for SpiMetricReader {
         self.connected
     }
 
-    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
-        crate::reader::ReaderCapabilities { batch_read: false }
-    }
-
-    async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
-        read_spi_metric(self, metric, &Arc::clone(&self.device_lock)).await
+    async fn read(
+        &mut self,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::reader::ReadResults {
+        let mut results = HashMap::new();
+        let device_lock = Arc::clone(&self.device_lock);
+        for i in 0..self.metrics.len() {
+            if cancel.is_cancelled() {
+                break;
+            }
+            let metric = &self.metrics[i];
+            let result = read_spi_metric(self, metric, &device_lock).await;
+            results.insert(metric.name.clone(), result);
+        }
+        let io_count = results.len();
+        crate::reader::ReadResults {
+            metrics: results,
+            io_count,
+        }
     }
 }
 

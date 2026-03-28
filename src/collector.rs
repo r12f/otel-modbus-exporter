@@ -5,12 +5,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
 
 use crate::config;
 use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
-use crate::reader::MetricReader;
+use crate::reader::{MetricReader, ReadResults};
 
 /// Maximum backoff duration for reconnection attempts.
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -54,6 +55,12 @@ async fn run_collector(
     let poll_interval = collector.polling_interval;
     let warn_threshold = poll_interval.mul_f64(0.8);
 
+    // CancellationToken for cooperative shutdown inside read()
+    let cancel = CancellationToken::new();
+
+    // Configure which metrics to read
+    client.set_metrics(collector.metrics.clone());
+
     // Initial connect
     loop {
         match client.connect().await {
@@ -67,6 +74,7 @@ async fn run_collector(
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
                     _ = shutdown_rx.changed() => {
+                        cancel.cancel();
                         let _ = client.disconnect().await;
                         return;
                     }
@@ -88,111 +96,63 @@ async fn run_collector(
             stats.polls_total.fetch_add(1, Relaxed);
         }
 
-        let use_batch = collector.batch_read && client.capabilities().batch_read;
+        // Check shutdown before read
+        if *shutdown_rx.borrow() {
+            info!("shutdown requested, exiting");
+            cancel.cancel();
+            let _ = client.disconnect().await;
+            return;
+        }
 
-        if use_batch {
-            // Batch path: coalesce registers and read in bulk
-            // Check shutdown before batch read
-            if *shutdown_rx.borrow() {
-                info!("shutdown requested, exiting");
-                let _ = client.disconnect().await;
-                return;
-            }
+        let ReadResults {
+            metrics: read_results,
+            io_count,
+        } = client.read(&cancel).await;
 
-            let batch_result = client.batch_read(&collector.metrics).await;
+        // Increment modbus_requests by actual I/O count
+        if let Some(ref im) = internal_metrics {
+            let stats = im.get_or_create_collector(&collector.name);
+            stats.modbus_requests.fetch_add(io_count as u64, Relaxed);
+        }
 
-            if let Some(ref im) = internal_metrics {
-                let stats = im.get_or_create_collector(&collector.name);
-                stats
-                    .modbus_requests
-                    .fetch_add(batch_result.read_count as u64, Relaxed);
-            }
+        for (metric_name, result) in read_results {
+            // Find the metric config for this name
+            let metric_cfg = match collector.metrics.iter().find(|m| m.name == metric_name) {
+                Some(cfg) => cfg,
+                None => continue,
+            };
 
-            for (metric_cfg, result) in batch_result.results {
-                match result {
-                    Ok(value) => {
-                        local_cache.insert(
-                            metric_cfg.name.clone(),
-                            MetricValue {
-                                name: metric_cfg.name.clone(),
-                                value,
-                                metric_type: map_metric_type(metric_cfg.metric_type),
-                                labels: BTreeMap::new(),
-                                description: metric_cfg.description.clone(),
-                                unit: metric_cfg.unit.clone(),
-                                updated_at: SystemTime::now(),
-                            },
-                        );
+            match result {
+                Ok(value) => {
+                    local_cache.insert(
+                        metric_name,
+                        MetricValue {
+                            name: metric_cfg.name.clone(),
+                            value,
+                            metric_type: map_metric_type(metric_cfg.metric_type),
+                            labels: BTreeMap::new(),
+                            description: metric_cfg.description.clone(),
+                            unit: metric_cfg.unit.clone(),
+                            updated_at: SystemTime::now(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    if let Some(ref im) = internal_metrics {
+                        let stats = im.get_or_create_collector(&collector.name);
+                        stats.modbus_errors.fetch_add(1, Relaxed);
                     }
-                    Err(e) => {
-                        if let Some(ref im) = internal_metrics {
-                            let stats = im.get_or_create_collector(&collector.name);
-                            stats.modbus_errors.fetch_add(1, Relaxed);
-                        }
 
-                        if !client.is_connected() {
-                            warn!(error = %e, "connection lost during batch poll");
-                            connection_error = true;
-                            poll_had_error = true;
-                            break;
-                        }
+                    if !client.is_connected() {
+                        warn!(error = %e, "connection lost during poll");
+                        connection_error = true;
                         poll_had_error = true;
-                        let count = error_counts.entry(metric_cfg.name.clone()).or_insert(0);
-                        *count += 1;
-                        warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
+                        break;
                     }
-                }
-            }
-        } else {
-            // Individual read path (original logic)
-            for metric_cfg in &collector.metrics {
-                // Check shutdown between metrics
-                if *shutdown_rx.borrow() {
-                    info!("shutdown requested, exiting");
-                    let _ = client.disconnect().await;
-                    return;
-                }
-
-                // Increment modbus_requests
-                if let Some(ref im) = internal_metrics {
-                    let stats = im.get_or_create_collector(&collector.name);
-                    stats.modbus_requests.fetch_add(1, Relaxed);
-                }
-
-                match client.read(metric_cfg).await {
-                    Ok(value) => {
-                        local_cache.insert(
-                            metric_cfg.name.clone(),
-                            MetricValue {
-                                name: metric_cfg.name.clone(),
-                                value,
-                                metric_type: map_metric_type(metric_cfg.metric_type),
-                                labels: BTreeMap::new(),
-                                description: metric_cfg.description.clone(),
-                                unit: metric_cfg.unit.clone(),
-                                updated_at: SystemTime::now(),
-                            },
-                        );
-                    }
-                    Err(e) => {
-                        // Increment modbus_errors
-                        if let Some(ref im) = internal_metrics {
-                            let stats = im.get_or_create_collector(&collector.name);
-                            stats.modbus_errors.fetch_add(1, Relaxed);
-                        }
-
-                        // Check if this is a connection-level error
-                        if !client.is_connected() {
-                            warn!(error = %e, "connection lost during poll");
-                            connection_error = true;
-                            poll_had_error = true;
-                            break;
-                        }
-                        poll_had_error = true;
-                        let count = error_counts.entry(metric_cfg.name.clone()).or_insert(0);
-                        *count += 1;
-                        warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
-                    }
+                    poll_had_error = true;
+                    let count = error_counts.entry(metric_name).or_insert(0);
+                    *count += 1;
+                    warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
                 }
             }
         }
@@ -212,6 +172,7 @@ async fn run_collector(
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
                     _ = shutdown_rx.changed() => {
+                        cancel.cancel();
                         let _ = client.disconnect().await;
                         return;
                     }
@@ -301,6 +262,7 @@ async fn run_collector(
                 _ = tokio::time::sleep(remaining) => {}
                 _ = shutdown_rx.changed() => {
                     info!("shutdown requested");
+                    cancel.cancel();
                     let _ = client.disconnect().await;
                     return;
                 }
@@ -309,6 +271,7 @@ async fn run_collector(
             // Check shutdown even if no sleep
             if *shutdown_rx.borrow() {
                 info!("shutdown requested");
+                cancel.cancel();
                 let _ = client.disconnect().await;
                 return;
             }

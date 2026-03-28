@@ -8,15 +8,15 @@
 
 ## Ownership Model
 
-Each collector owns exactly one `MetricReader` instance. Readers are not shared across collectors — there is no concurrent access to a single reader. The collector calls `read()` or `batch_read()` sequentially within its polling loop, so `&mut self` is the correct receiver.
+Each collector owns exactly one `MetricReader` instance. Readers are not shared across collectors — there is no concurrent access to a single reader. The collector calls `set_metrics()` once at startup, then calls `read()` sequentially within its polling loop, so `&mut self` is the correct receiver.
 
 ## Trait
 
 ```rust
 #[async_trait]
-pub trait MetricReader: Send + Sync {
-    /// What this reader supports.
-    fn capabilities(&self) -> ReaderCapabilities;
+pub trait MetricReader: Send {
+    /// Configure which metrics this reader should collect.
+    fn set_metrics(&mut self, metrics: Vec<MetricConfig>);
 
     /// Connect to the device/bus.
     async fn connect(&mut self) -> Result<()>;
@@ -27,62 +27,33 @@ pub trait MetricReader: Send + Sync {
     /// Whether the reader is connected.
     fn is_connected(&self) -> bool;
 
-    /// Read a single metric. Returns the decoded value.
-    async fn read(&mut self, metric: &MetricConfig) -> Result<f64>;
-
-    /// Batch read. Returns results in the same order as the input slice.
-    /// Default implementation calls read() per metric.
-    async fn batch_read(
-        &mut self,
-        metrics: &[MetricConfig],
-    ) -> Vec<(&MetricConfig, Result<f64>)> {
-        let mut results = Vec::with_capacity(metrics.len());
-        for m in metrics {
-            results.push((m, self.read(m).await));
-        }
-        results
-    }
-}
-
-pub struct ReaderCapabilities {
-    pub batch_read: bool,
+    /// Read all configured metrics. Returns name → result mapping.
+    async fn read(&mut self) -> HashMap<String, Result<f64>>;
 }
 ```
 
 **Error handling:** `Result` uses `anyhow::Result` — the collector logs errors and updates internal metrics (error counters). Transient errors (connection lost, timeout) trigger reconnect; permanent errors (invalid config) are logged once.
 
-## Capabilities
+## Design
 
-Each reader reports what it supports via `capabilities()`. The collector checks this at runtime:
+Each reader stores its configured metrics internally via `set_metrics()`. When `read()` is called, the reader iterates over all configured metrics and returns a `HashMap<String, Result<f64>>` mapping metric names to their results.
 
-- If `config.batch_read == true` **and** `reader.capabilities().batch_read == true` → use `batch_read()`
-- Otherwise → iterate with `read()`
-
-## Config
-
-```yaml
-protocol:
-  type: modbus-tcp
-  endpoint: "192.168.1.100:502"
-  batch_read: true  # optional, default: false
-```
-
-The `batch_read` field is available on all protocol types but only takes effect when the reader supports it.
+Protocol-specific optimizations (e.g., Modbus register coalescing) are handled internally by each reader implementation — the collector doesn't need to know about batch capabilities.
 
 ## Implementations
 
-| Protocol | `batch_read` support | Notes |
-|----------|---------------------|-------|
-| [Modbus TCP/RTU](modbus.md) | ✅ | Coalesces adjacent register ranges |
-| [I2C](i2c.md) | ❌ | Single-device reads |
-| [SPI](spi.md) | ❌ | Single-device reads |
-| [I3C](i3c.md) | ❌ | Single-device reads |
+| Protocol | Internal optimization | Notes |
+|----------|----------------------|-------|
+| [Modbus TCP/RTU](modbus.md) | Register coalescing | Coalesces adjacent register ranges automatically |
+| [I2C](i2c.md) | None | Single-device reads |
+| [SPI](spi.md) | None | Single-device reads |
+| [I3C](i3c.md) | None | Single-device reads |
 
 ## Source Layout
 
-```
+```text
 src/reader/
-  mod.rs              — MetricReader trait, ReaderCapabilities
+  mod.rs              — MetricReader trait
   modbus/
     mod.rs            — Modbus MetricReader impl
     tcp.rs            — TCP transport
@@ -100,7 +71,3 @@ src/reader/
     mod.rs
     mod_tests.rs
 ```
-
-Renamed from previous layout: `src/modbus/`, `src/i2c/`, `src/spi/`, `src/i3c/` → `src/reader/*`.
-
-The `src/export/` → `src/exporter/` rename is a separate structural change done in the same implementation PR.
