@@ -14,6 +14,7 @@ use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 use crate::reader::i2c::{self, I2cClient};
 use crate::reader::i3c;
+use crate::reader::modbus::batch::batch_read_coalesced;
 use crate::reader::modbus::{BusConnection, ModbusClient};
 use crate::reader::spi::{self, SpiClient};
 
@@ -205,53 +206,106 @@ async fn run_collector(
             stats.polls_total.fetch_add(1, Relaxed);
         }
 
-        for metric_cfg in &collector.metrics {
-            // Check shutdown between metrics
-            if *shutdown_rx.borrow() {
-                info!("shutdown requested, exiting");
-                let _ = client.disconnect().await;
-                return;
-            }
+        // Use batch_read when configured and the client is Modbus
+        let use_batch = collector.batch_read && matches!(client, BusClient::Modbus(_));
 
-            // Increment modbus_requests
-            if let Some(ref im) = internal_metrics {
-                let stats = im.get_or_create_collector(&collector.name);
-                stats.modbus_requests.fetch_add(1, Relaxed);
-            }
-
-            match read_bus_metric(&mut client, metric_cfg).await {
-                Ok(value) => {
-                    local_cache.insert(
-                        metric_cfg.name.clone(),
-                        MetricValue {
-                            name: metric_cfg.name.clone(),
-                            value,
-                            metric_type: map_metric_type(metric_cfg.metric_type),
-                            labels: BTreeMap::new(),
-                            description: metric_cfg.description.clone(),
-                            unit: metric_cfg.unit.clone(),
-                            updated_at: SystemTime::now(),
-                        },
-                    );
+        if use_batch {
+            // Batch path: coalesce registers and read in bulk
+            if let BusClient::Modbus(ref mut modbus_client) = client {
+                if let Some(ref im) = internal_metrics {
+                    let stats = im.get_or_create_collector(&collector.name);
+                    stats.modbus_requests.fetch_add(1, Relaxed);
                 }
-                Err(e) => {
-                    // Increment modbus_errors
-                    if let Some(ref im) = internal_metrics {
-                        let stats = im.get_or_create_collector(&collector.name);
-                        stats.modbus_errors.fetch_add(1, Relaxed);
-                    }
 
-                    // Check if this is a connection-level error
-                    if !client.is_connected() {
-                        error!(error = %e, "connection lost during poll");
-                        connection_error = true;
-                        poll_had_error = true;
-                        break;
+                let batch_results =
+                    batch_read_coalesced(modbus_client.as_mut(), &collector.metrics).await;
+
+                for (metric_cfg, result) in batch_results {
+                    match result {
+                        Ok(value) => {
+                            local_cache.insert(
+                                metric_cfg.name.clone(),
+                                MetricValue {
+                                    name: metric_cfg.name.clone(),
+                                    value,
+                                    metric_type: map_metric_type(metric_cfg.metric_type),
+                                    labels: BTreeMap::new(),
+                                    description: metric_cfg.description.clone(),
+                                    unit: metric_cfg.unit.clone(),
+                                    updated_at: SystemTime::now(),
+                                },
+                            );
+                        }
+                        Err(e) => {
+                            if let Some(ref im) = internal_metrics {
+                                let stats = im.get_or_create_collector(&collector.name);
+                                stats.modbus_errors.fetch_add(1, Relaxed);
+                            }
+
+                            if !modbus_client.is_connected() {
+                                error!(error = %e, "connection lost during batch poll");
+                                connection_error = true;
+                                poll_had_error = true;
+                                break;
+                            }
+                            poll_had_error = true;
+                            let count = error_counts.entry(metric_cfg.name.clone()).or_insert(0);
+                            *count += 1;
+                            warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
+                        }
                     }
-                    poll_had_error = true;
-                    let count = error_counts.entry(metric_cfg.name.clone()).or_insert(0);
-                    *count += 1;
-                    warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
+                }
+            }
+        } else {
+            // Individual read path (original logic)
+            for metric_cfg in &collector.metrics {
+                // Check shutdown between metrics
+                if *shutdown_rx.borrow() {
+                    info!("shutdown requested, exiting");
+                    let _ = client.disconnect().await;
+                    return;
+                }
+
+                // Increment modbus_requests
+                if let Some(ref im) = internal_metrics {
+                    let stats = im.get_or_create_collector(&collector.name);
+                    stats.modbus_requests.fetch_add(1, Relaxed);
+                }
+
+                match read_bus_metric(&mut client, metric_cfg).await {
+                    Ok(value) => {
+                        local_cache.insert(
+                            metric_cfg.name.clone(),
+                            MetricValue {
+                                name: metric_cfg.name.clone(),
+                                value,
+                                metric_type: map_metric_type(metric_cfg.metric_type),
+                                labels: BTreeMap::new(),
+                                description: metric_cfg.description.clone(),
+                                unit: metric_cfg.unit.clone(),
+                                updated_at: SystemTime::now(),
+                            },
+                        );
+                    }
+                    Err(e) => {
+                        // Increment modbus_errors
+                        if let Some(ref im) = internal_metrics {
+                            let stats = im.get_or_create_collector(&collector.name);
+                            stats.modbus_errors.fetch_add(1, Relaxed);
+                        }
+
+                        // Check if this is a connection-level error
+                        if !client.is_connected() {
+                            error!(error = %e, "connection lost during poll");
+                            connection_error = true;
+                            poll_had_error = true;
+                            break;
+                        }
+                        poll_had_error = true;
+                        let count = error_counts.entry(metric_cfg.name.clone()).or_insert(0);
+                        *count += 1;
+                        warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
+                    }
                 }
             }
         }

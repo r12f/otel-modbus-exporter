@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod rtu;
 pub mod tcp;
 

@@ -113,6 +113,7 @@ fn test_collector_config(name: &str) -> Collector {
         polling_interval: Duration::from_millis(100),
         labels: HashMap::new(),
         metrics_files: None,
+        batch_read: false,
         metrics: vec![Metric {
             name: "temperature".to_string(),
             description: "Temperature sensor".to_string(),

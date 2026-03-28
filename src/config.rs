@@ -246,6 +246,8 @@ pub struct Collector {
     pub metrics_files: Option<Vec<String>>,
     #[serde(default)]
     pub metrics: Vec<Metric>,
+    #[serde(default)]
+    pub batch_read: bool,
 }
 
 fn default_polling_interval() -> Duration {
