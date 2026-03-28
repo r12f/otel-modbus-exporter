@@ -11,6 +11,7 @@ use crate::bus;
 use crate::config::{self, RegisterType};
 use crate::decoder;
 use crate::i2c::{self, I2cClient};
+use crate::i3c;
 use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 use crate::modbus::ModbusClient;
@@ -42,6 +43,10 @@ pub enum BusClient {
         client: SpiClient,
         device_lock: spi::DeviceLock,
     },
+    I3c {
+        client: Arc<tokio::sync::Mutex<i3c::I3cClient>>,
+        bus_lock: i3c::BusLock,
+    },
 }
 
 impl BusClient {
@@ -55,6 +60,11 @@ impl BusClient {
             BusClient::Spi { client, .. } => {
                 use crate::modbus::BusConnection;
                 client.connect().await
+            }
+            BusClient::I3c { client, .. } => {
+                let mut c = client.lock().await;
+                use crate::modbus::BusConnection;
+                c.connect().await
             }
         }
     }
@@ -70,6 +80,11 @@ impl BusClient {
                 use crate::modbus::BusConnection;
                 client.disconnect().await
             }
+            BusClient::I3c { client, .. } => {
+                let mut c = client.lock().await;
+                use crate::modbus::BusConnection;
+                c.disconnect().await
+            }
         }
     }
 
@@ -83,6 +98,16 @@ impl BusClient {
             BusClient::Spi { client, .. } => {
                 use crate::modbus::BusConnection;
                 client.is_connected()
+            }
+            BusClient::I3c { client, .. } => {
+                // Best-effort: try_lock to avoid blocking
+                client
+                    .try_lock()
+                    .map(|c| {
+                        use crate::modbus::BusConnection;
+                        c.is_connected()
+                    })
+                    .unwrap_or(true)
             }
         }
     }
@@ -147,6 +172,7 @@ async fn read_bus_metric(client: &mut BusClient, metric: &config::Metric) -> Res
             client,
             device_lock,
         } => spi::read_spi_metric(client, metric, device_lock).await,
+        BusClient::I3c { client, bus_lock } => i3c::read_i3c_metric(client, metric, bus_lock).await,
     }
 }
 

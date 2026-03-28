@@ -5,6 +5,7 @@ mod config;
 mod decoder;
 mod export;
 mod i2c;
+mod i3c;
 mod internal_metrics;
 mod logging;
 mod metrics;
@@ -109,6 +110,40 @@ impl BusClientFactory for RealBusClientFactory {
                 Ok(BusClient::Spi {
                     client,
                     device_lock,
+                })
+            }
+            Protocol::I3c {
+                bus,
+                pid,
+                address,
+                device_class,
+                instance,
+            } => {
+                let address_mode = if let Some(pid_str) = pid {
+                    i3c::AddressMode::Pid(pid_str.clone())
+                } else if let Some(addr) = address {
+                    i3c::AddressMode::Static(*addr)
+                } else {
+                    i3c::AddressMode::DeviceClass {
+                        class: device_class.clone().unwrap(),
+                        instance: instance.unwrap(),
+                    }
+                };
+
+                #[cfg(target_os = "linux")]
+                let device: Box<dyn i3c::I3cDevice> = {
+                    let mut dev = i3c::linux_device::LinuxI3cDevice::new(bus.clone());
+                    dev.open().context("failed to open I3C device")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let device: Box<dyn i3c::I3cDevice> = Box::new(i3c::StubI3cDevice);
+
+                let client = i3c::I3cClient::new(device, bus.clone(), address_mode);
+                let bus_lock = i3c::get_bus_lock(bus);
+                Ok(BusClient::I3c {
+                    client: std::sync::Arc::new(tokio::sync::Mutex::new(client)),
+                    bus_lock,
                 })
             }
         }

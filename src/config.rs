@@ -281,6 +281,18 @@ pub enum Protocol {
         #[serde(default = "default_spi_bits_per_word")]
         bits_per_word: u8,
     },
+    #[serde(rename = "i3c")]
+    I3c {
+        bus: String,
+        #[serde(default)]
+        pid: Option<String>,
+        #[serde(default)]
+        address: Option<u8>,
+        #[serde(default)]
+        device_class: Option<String>,
+        #[serde(default)]
+        instance: Option<u8>,
+    },
 }
 
 fn default_spi_speed_hz() -> u32 {
@@ -759,6 +771,62 @@ impl Config {
                         );
                     }
                 }
+                Protocol::I3c {
+                    bus,
+                    pid,
+                    address,
+                    device_class,
+                    instance,
+                } => {
+                    if bus.is_empty() {
+                        bail!("collector '{}': I3C bus path must not be empty", c.name);
+                    }
+                    // slave_id not used for I3C
+                    if c.slave_id.is_some() {
+                        bail!(
+                            "collector '{}': slave_id is not used for I3C protocol",
+                            c.name
+                        );
+                    }
+                    // Exactly one address mode
+                    let has_pid = pid.is_some();
+                    let has_address = address.is_some();
+                    let has_class = device_class.is_some();
+                    let has_instance = instance.is_some();
+                    let mode_count =
+                        has_pid as u8 + has_address as u8 + (has_class || has_instance) as u8;
+                    if mode_count != 1 {
+                        bail!(
+                            "collector '{}': exactly one address mode must be set (pid, address, or device_class+instance)",
+                            c.name
+                        );
+                    }
+                    if has_class != has_instance {
+                        bail!(
+                            "collector '{}': device_class requires instance (and vice versa)",
+                            c.name
+                        );
+                    }
+                    if let Some(addr) = address {
+                        if *addr < 0x08 || *addr > 0x3D {
+                            bail!(
+                                "collector '{}': I3C address must be 0x08-0x3D, got {:#04x}",
+                                c.name,
+                                addr
+                            );
+                        }
+                    }
+                    if let Some(pid_str) = pid {
+                        let hex_str = pid_str.trim_start_matches("0x").trim_start_matches("0X");
+                        if hex_str.len() != 12 || u64::from_str_radix(hex_str, 16).is_err() {
+                            bail!(
+                                "collector '{}': PID must be a valid 48-bit hex string (e.g., \"0x0123456789AB\"), got \"{}\"",
+                                c.name,
+                                pid_str
+                            );
+                        }
+                    }
+                }
             }
             // Validate polling_interval minimum (1ms)
             if c.polling_interval.as_millis() < 1 {
@@ -773,15 +841,22 @@ impl Config {
             }
             let is_i2c = matches!(c.protocol, Protocol::I2c { .. });
             let is_spi = matches!(c.protocol, Protocol::Spi { .. });
-            let is_modbus = !is_i2c && !is_spi;
+            let is_i3c = matches!(c.protocol, Protocol::I3c { .. });
+            let is_modbus = !is_i2c && !is_spi && !is_i3c;
             for m in &c.metrics {
-                // Address is required for Modbus and I2C protocols
+                // Address is required for Modbus, I2C, and I3C protocols
                 if !is_spi && m.address.is_none() {
                     bail!(
                         "collector '{}', metric '{}': address is required for {} protocol",
                         c.name,
                         m.name,
-                        if is_i2c { "I2C" } else { "Modbus" }
+                        if is_i2c {
+                            "I2C"
+                        } else if is_i3c {
+                            "I3C"
+                        } else {
+                            "Modbus"
+                        }
                     );
                 }
                 // Modbus-specific validations
@@ -886,6 +961,29 @@ impl Config {
                             m.response_offset,
                             data_bytes,
                             resp_len
+                        );
+                    }
+                }
+                // I3C-specific validations
+                if is_i3c {
+                    // Validate metric address fits in u8
+                    if m.address.unwrap() > 0xFF {
+                        bail!(
+                            "collector '{}', metric '{}': I3C register address {:#06x} exceeds u8 range (max 0xFF)",
+                            c.name,
+                            m.name,
+                            m.address.unwrap()
+                        );
+                    }
+                    // Mid-endian byte orders are Modbus-specific
+                    if matches!(
+                        m.byte_order,
+                        ByteOrder::MidBigEndian | ByteOrder::MidLittleEndian
+                    ) {
+                        bail!(
+                            "collector '{}', metric '{}': mid-endian byte order is not supported for I3C (Modbus-specific)",
+                            c.name,
+                            m.name
                         );
                     }
                 }
