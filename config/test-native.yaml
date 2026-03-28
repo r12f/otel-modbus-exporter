@@ -1,0 +1,81 @@
+# bus-exporter test configuration for native (non-Docker) e2e tests.
+# The simulator runs on localhost:{{PORT}} — the test rewrites this file
+# with the actual port before starting bus-exporter.
+
+global_labels:
+  env: test
+  site: e2e
+
+logging:
+  level: debug
+  output: stdout
+
+exporters:
+  otlp:
+    enabled: false
+    endpoint: "http://localhost:4318"
+  prometheus:
+    enabled: true
+    listen: "0.0.0.0:0"
+    path: "/metrics"
+
+collectors:
+  - name: test_device
+    protocol:
+      type: modbus-tcp
+      endpoint: "localhost:5020"
+    slave_id: 1
+    polling_interval: "1s"
+    labels:
+      device: simulator
+    metrics:
+      - name: voltage_phase_a
+        description: "Phase A voltage"
+        type: gauge
+        register_type: holding
+        address: 0
+        data_type: u16
+        byte_order: big_endian
+        scale: 0.1
+        offset: 0.0
+        unit: "V"
+      - name: total_energy
+        description: "Total energy consumption"
+        type: counter
+        register_type: holding
+        address: 16
+        data_type: u32
+        byte_order: big_endian
+        scale: 0.01
+        offset: 0.0
+        unit: "kWh"
+      - name: temperature
+        description: "Temperature sensor"
+        type: gauge
+        register_type: input
+        address: 0
+        data_type: i16
+        byte_order: big_endian
+        scale: 0.1
+        offset: 40.0
+        unit: "C"
+      - name: frequency
+        description: "Frequency"
+        type: gauge
+        register_type: holding
+        address: 32
+        data_type: f32
+        byte_order: big_endian
+        scale: 1.0
+        offset: 0.0
+        unit: "Hz"
+      - name: total_energy_mid
+        description: "Total energy mid-big-endian"
+        type: counter
+        register_type: holding
+        address: 48
+        data_type: u32
+        byte_order: mid_big_endian
+        scale: 0.01
+        offset: 0.0
+        unit: "kWh"

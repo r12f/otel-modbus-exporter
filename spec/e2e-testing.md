@@ -3,80 +3,60 @@
 ## Overview
 
 - E2E tests validate the full pipeline: Modbus device → collector → cache → Prometheus exporter
-- Use `oitc/modbus-server` Docker image as Modbus TCP simulator
-- Use Prometheus `/metrics` scrape endpoint to validate exported values
+- Uses a **Rust-native Modbus TCP simulator** (via `tokio-modbus` server API) — no Docker required
+- Uses Prometheus `/metrics` scrape endpoint to validate exported values
 
 ## Architecture
 
 ```text
-oitc/modbus-server (simulator) → bus-exporter → Prometheus /metrics → test assertions
+Rust Modbus TCP simulator (in-process) → bus-exporter (child process) → Prometheus /metrics → test assertions
 ```
 
-## docker-compose.test.yml
+## Test Implementation
 
-Two services:
+The e2e test is a Rust integration test at `tests/e2e_modbus.rs` that:
 
-1. **`modbus-simulator`** — uses `oitc/modbus-server` image with a JSON config (`config/modbus-simulator.json`) that pre-loads known register values (holding and input registers with deterministic values).
-2. **`bus-exporter`** — built from the local Dockerfile, configured via `config/test.yaml` pointing to `modbus-simulator:5020`. Prometheus endpoint enabled, OTLP disabled.
+1. **Starts an in-process Modbus TCP simulator** using `tokio-modbus` server API on a random port
+2. **Generates a test config** pointing bus-exporter at the simulator
+3. **Starts bus-exporter** as a child process with `--config <temp-config>`
+4. **Waits** for the Prometheus `/metrics` endpoint to become available
+5. **Scrapes and validates** metric output (names, types, labels, values with float tolerance)
+6. **Sends SIGTERM** and verifies graceful shutdown (exit code 0)
 
-## Test Config
+## Simulator Register Values
 
-### Simulator Config (`config/modbus-simulator.json`)
-
-Pre-load specific register values in the simulator so test assertions are deterministic:
+Pre-loaded register values matching `config/modbus-simulator.json`:
 
 | Register Type | Address | Raw Value | Meaning | Data Type | Byte Order |
 |---------------|---------|-----------|---------|-----------|------------|
-| holding | 0x0000 | 2300 | 230.0V (scale 0.1) | u16 | big_endian |
-| holding | 0x0010 | 0x00015F90 (90000) | 900.00 kWh (scale 0.01) | u32 | big_endian |
-| input | 0x0000 | 0xFF9C (-100) | -50.0°C (scale 0.1, offset +40.0) | i16 | big_endian |
-| holding | 0x0020 | 0x43480000 (200.0) | 200.0 Hz (scale 1.0) | f32 | big_endian |
-| holding | 0x0030 | 0x00015F90 (90000) | 900.00 kWh (scale 0.01) | u32 | mid_big_endian |
+| holding | 0 | 2300 | 230.0V (scale 0.1) | u16 | big_endian |
+| holding | 16,17 | 1, 24464 (u32=90000) | 900.00 kWh (scale 0.01) | u32 | big_endian |
+| input | 0 | 65436 (i16=-100) | 30.0°C (scale 0.1, offset +40.0) | i16 | big_endian |
+| holding | 32,33 | 0x4348, 0x0000 (f32=200.0) | 200.0 Hz (scale 1.0) | f32 | big_endian |
+| holding | 48,49 | 24464, 1 (u32=90000) | 900.00 kWh (scale 0.01) | u32 | mid_big_endian |
 
-### Exporter Config (`config/test.yaml`)
-
-- Maps the above registers to named metrics with known scale/offset
-- Enables Prometheus exporter on a known port (e.g., `0.0.0.0:9090`)
-- Disables OTLP exporter
-- Single collector pointing to `modbus-simulator:5020`
-- Covers all data types: u16, u32, i16, f32
-- Covers byte orders: big_endian, mid_big_endian
-
-### Expected Metrics
+## Expected Metrics
 
 | Metric Name | Expected Value | Type | Labels |
 |-------------|---------------|------|--------|
-| `voltage_phase_a` | 230.0 | gauge | global + collector labels |
-| `total_energy` | 900.0 | counter | global + collector labels |
-| `temperature` | -50.0 | gauge | global + collector labels |
-| `frequency` | 200.0 | gauge | global + collector labels |
-| `total_energy_mid` | 900.0 | counter | global + collector labels |
+| `bus_voltage_phase_a_V` | 230.0 | gauge | env="test", site="e2e", device="simulator" |
+| `bus_total_energy_kWh` | 900.0 | counter | env="test", site="e2e", device="simulator" |
+| `bus_temperature_C` | 30.0 | gauge | env="test", site="e2e", device="simulator" |
+| `bus_frequency_Hz` | 200.0 | gauge | env="test", site="e2e", device="simulator" |
+| `bus_total_energy_mid_kWh` | 900.0 | counter | env="test", site="e2e", device="simulator" |
 
-## Test Script (`make e2e`)
+## Running
 
-The test script (`tests/e2e/run.sh`) performs the following steps:
+```bash
+# Via Makefile
+make e2e
 
-1. **Start** — `docker-compose -f docker-compose.test.yml up -d --build`
-2. **Wait** — poll the exporter's Prometheus endpoint until it returns HTTP 200 with metric data (retry with backoff, timeout after ~30s), ensuring at least one poll cycle has completed
-3. **Scrape** — `curl http://localhost:9090/metrics`
-4. **Assert**:
-   - Expected metric names exist in the output
-   - Values match expected (raw × scale + offset) within floating-point tolerance
-   - Labels are correct — both global labels and per-collector labels are present
-   - Counter vs gauge `# TYPE` annotations are correct
-5. **Tear down** — `docker-compose -f docker-compose.test.yml down -v`
-6. **Exit** — exit 0 on success, exit 1 on any assertion failure (with diagnostic output)
-
-## Makefile Target
-
-```makefile
-e2e:  ## Run E2E tests with docker-compose
-    bash tests/e2e/run.sh
+# Via cargo directly
+cargo test --test e2e_modbus -- --nocapture
 ```
 
 ## CI Integration
 
-- E2E tests can run in GitHub Actions using `docker-compose` (Docker is available in GitHub-hosted runners)
-- Should be a separate job or step from unit/integration tests in `ci.yml`
-- Runs after the Docker image builds successfully
-- Failure in E2E tests should fail the CI pipeline
+- E2E tests run in the `e2e` job in `.github/workflows/ci.yml`
+- No Docker required — runs on any GitHub-hosted runner with Rust toolchain
+- Previously paused due to Docker Hub rate-limiting of `oitc/modbus-server`; now fully native

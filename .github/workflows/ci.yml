@@ -31,35 +31,11 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
   e2e:
-    if: false # Paused: Docker Hub rate-limiting oitc/modbus-server pulls
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Start services
-        run: docker compose -f docker-compose.test.yml up -d
-      - name: Wait for exporter readiness
-        run: |
-          echo "Waiting for exporter on localhost:9090/metrics..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:9090/metrics > /dev/null 2>&1; then
-              echo "Exporter ready after ${i}s"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "=== Container logs ==="
-          docker compose -f docker-compose.test.yml logs
-          echo "=== Container status ==="
-          docker compose -f docker-compose.test.yml ps -a
-          echo "Exporter not ready after 60s"
-          exit 1
-      - name: Run E2E tests
-        run: bash tests/e2e/run.sh
-      - name: Stop services
-        if: always()
-        run: |
-          docker compose -f docker-compose.test.yml logs
-          docker compose -f docker-compose.test.yml down -v
+      - name: Run native E2E tests
+        run: cargo test --test e2e_modbus -- --nocapture

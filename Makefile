@@ -18,8 +18,8 @@ test:
 docker:
 	docker buildx build --platform linux/amd64,linux/arm64 -t bus-exporter .
 
-e2e:  ## Run E2E tests with docker-compose
-	bash tests/e2e/run.sh
+e2e:  ## Run native E2E tests (Rust-based Modbus simulator, no Docker needed)
+	cargo test --test e2e_modbus -- --nocapture
 
 clean:
 	cargo clean
