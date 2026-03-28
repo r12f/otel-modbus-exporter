@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# E2E test script for modbus-exporter
+# E2E test script for bus-exporter
 # Starts modbus simulator + exporter via docker compose,
 # polls Prometheus /metrics endpoint, and validates output.
 set -euo pipefail
@@ -97,55 +97,55 @@ echo ""
 echo "==> Asserting metrics..."
 
 # Check metric existence
-assert_metric_exists "modbus_voltage_phase_a_V"
-assert_metric_exists "modbus_total_energy_kWh"
-assert_metric_exists "modbus_temperature_C"
-assert_metric_exists "modbus_frequency_Hz"
-assert_metric_exists "modbus_total_energy_mid_kWh"
+assert_metric_exists "bus_voltage_phase_a_V"
+assert_metric_exists "bus_total_energy_kWh"
+assert_metric_exists "bus_temperature_C"
+assert_metric_exists "bus_frequency_Hz"
+assert_metric_exists "bus_total_energy_mid_kWh"
 
 # Check types
-assert_type "modbus_voltage_phase_a_V" "gauge"
-assert_type "modbus_total_energy_kWh" "counter"
-assert_type "modbus_temperature_C" "gauge"
-assert_type "modbus_frequency_Hz" "gauge"
-assert_type "modbus_total_energy_mid_kWh" "counter"
+assert_type "bus_voltage_phase_a_V" "gauge"
+assert_type "bus_total_energy_kWh" "counter"
+assert_type "bus_temperature_C" "gauge"
+assert_type "bus_frequency_Hz" "gauge"
+assert_type "bus_total_energy_mid_kWh" "counter"
 
 # Check global labels
-assert_label "modbus_voltage_phase_a_V" 'env="test"'
-assert_label "modbus_voltage_phase_a_V" 'site="e2e"'
+assert_label "bus_voltage_phase_a_V" 'env="test"'
+assert_label "bus_voltage_phase_a_V" 'site="e2e"'
 
 # Check collector labels
-assert_label "modbus_voltage_phase_a_V" 'device="simulator"'
+assert_label "bus_voltage_phase_a_V" 'device="simulator"'
 
 # Check metric values (deterministic simulator registers + scale/offset)
 # voltage_phase_a: register 0 = 2300 (u16), scale=0.1, offset=0.0 → 230.0
-assert_value "modbus_voltage_phase_a_V" 230.0
+assert_value "bus_voltage_phase_a_V" 230.0
 # total_energy: registers 16,17 = (1<<16)|24464 = 90000 (u32), scale=0.01, offset=0.0 → 900.0
-assert_value "modbus_total_energy_kWh" 900.0
+assert_value "bus_total_energy_kWh" 900.0
 # temperature: register 0 = 65436 (i16 = -100), scale=0.1, offset=40.0 → -10.0+40.0 = 30.0
-assert_value "modbus_temperature_C" 30.0
+assert_value "bus_temperature_C" 30.0
 # frequency: registers 32,33 = 0x43480000 (f32 = 200.0), scale=1.0, offset=0.0 → 200.0
-assert_value "modbus_frequency_Hz" 200.0
+assert_value "bus_frequency_Hz" 200.0
 # total_energy_mid: registers 48,49 mid-big = same value 90000 (u32), scale=0.01 → 900.0
-assert_value "modbus_total_energy_mid_kWh" 900.0
+assert_value "bus_total_energy_mid_kWh" 900.0
 
 echo ""
 echo "==> Asserting internal metrics..."
 
 # Internal metrics existence
-assert_metric_exists "modbus_exporter_collectors_total"
-assert_metric_exists "modbus_exporter_uptime_seconds"
-assert_metric_exists "modbus_exporter_polls_total"
-assert_metric_exists "modbus_exporter_prometheus_scrapes_total"
+assert_metric_exists "bus_exporter_collectors_total"
+assert_metric_exists "bus_exporter_uptime_seconds"
+assert_metric_exists "bus_exporter_polls_total"
+assert_metric_exists "bus_exporter_prometheus_scrapes_total"
 
 # Types
-assert_type "modbus_exporter_collectors_total" "gauge"
-assert_type "modbus_exporter_uptime_seconds" "gauge"
-assert_type "modbus_exporter_polls_total" "counter"
-assert_type "modbus_exporter_prometheus_scrapes_total" "counter"
+assert_type "bus_exporter_collectors_total" "gauge"
+assert_type "bus_exporter_uptime_seconds" "gauge"
+assert_type "bus_exporter_polls_total" "counter"
+assert_type "bus_exporter_prometheus_scrapes_total" "counter"
 
 # Uptime should be > 0
-UPTIME_VAL=$(echo "$METRICS" | grep "^modbus_exporter_uptime_seconds " | awk '{print $2}')
+UPTIME_VAL=$(echo "$METRICS" | grep "^bus_exporter_uptime_seconds " | awk '{print $2}')
 if [ -n "$UPTIME_VAL" ] && awk "BEGIN { exit !($UPTIME_VAL > 0) }"; then
   echo "  PASS: uptime_seconds=${UPTIME_VAL} > 0"
 else
@@ -155,7 +155,7 @@ fi
 
 echo ""
 echo "==> Testing graceful shutdown..."
-EXPORTER_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q modbus-exporter)
+EXPORTER_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q bus-exporter)
 if [ -n "$EXPORTER_CONTAINER" ]; then
   docker stop --time=10 "$EXPORTER_CONTAINER"
   EXIT_CODE=$(docker inspect "$EXPORTER_CONTAINER" --format='{{.State.ExitCode}}')
