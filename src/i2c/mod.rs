@@ -49,8 +49,13 @@ pub mod linux_device {
                 .open(&self.bus_path)
                 .with_context(|| format!("opening I2C bus {}", self.bus_path))?;
 
-            let ret =
-                unsafe { libc::ioctl(file.as_raw_fd(), I2C_SLAVE, self.address as libc::c_ulong) };
+            let ret = unsafe {
+                libc::ioctl(
+                    file.as_raw_fd(),
+                    I2C_SLAVE as libc::Ioctl,
+                    self.address as libc::c_ulong,
+                )
+            };
             if ret < 0 {
                 anyhow::bail!(
                     "ioctl I2C_SLAVE failed for address {:#04x} on {}",

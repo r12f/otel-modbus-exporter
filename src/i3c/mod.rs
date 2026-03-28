@@ -110,7 +110,7 @@ pub mod linux_device {
 
             let request = i3c_ioc_priv_xfer(xfers.len());
             // SAFETY: xfers is a valid array of I3cPrivTransfer structs pointing to valid buffers.
-            let ret = unsafe { libc::ioctl(raw_fd, request, xfers.as_ptr()) };
+            let ret = unsafe { libc::ioctl(raw_fd, request as libc::Ioctl, xfers.as_ptr()) };
             if ret < 0 {
                 return Err(std::io::Error::last_os_error())
                     .context("I3C private transfer ioctl failed");
