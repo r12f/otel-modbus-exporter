@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="bus-exporter logo" width="200">
+</p>
+
 # bus-exporter
 
 A hardware bus metrics exporter that polls Modbus RTU/TCP, I2C, SPI, and I3C devices and exports metrics via OTLP (protobuf/HTTP), Prometheus scrape endpoint, and MQTT.
