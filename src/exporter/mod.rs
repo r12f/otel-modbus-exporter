@@ -3,11 +3,13 @@ pub mod otlp;
 pub mod prometheus;
 
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::config::{ExportersConfig, MetricConfig};
+use crate::metrics::{MetricType, MetricValue};
 
 /// Common trait for all metric exporters.
 ///
@@ -24,6 +26,37 @@ pub trait MetricExporter: Send {
 
     /// Graceful shutdown.
     async fn shutdown(&mut self) -> Result<()>;
+}
+
+/// Convert metric configs + cached results into `MetricValue` list.
+///
+/// Shared by all exporters — skips metrics without a successful result.
+pub fn results_to_metric_values(
+    metrics: &[MetricConfig],
+    results: &HashMap<String, Result<f64>>,
+) -> Vec<MetricValue> {
+    let now = SystemTime::now();
+    metrics
+        .iter()
+        .filter_map(|cfg| {
+            let value = match results.get(&cfg.name) {
+                Some(Ok(v)) => *v,
+                _ => return None,
+            };
+            Some(MetricValue {
+                name: cfg.name.clone(),
+                value,
+                metric_type: match cfg.metric_type {
+                    crate::config::MetricType::Gauge => MetricType::Gauge,
+                    crate::config::MetricType::Counter => MetricType::Counter,
+                },
+                labels: std::collections::BTreeMap::new(),
+                description: cfg.description.clone(),
+                unit: cfg.unit.clone(),
+                updated_at: now,
+            })
+        })
+        .collect()
 }
 
 /// Create the appropriate exporter(s) from the top-level exporter config.

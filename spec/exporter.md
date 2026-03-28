@@ -26,9 +26,7 @@ pub trait MetricExporter: Send {
 ## Factory
 
 ```rust
-pub trait MetricExporterFactory {
-    fn create(config: &ExporterConfig) -> Result<Box<dyn MetricExporter>>;
-}
+pub fn create_exporters(config: &ExportersConfig) -> Result<Vec<Box<dyn MetricExporter>>>;
 ```
 
 ## Implementations

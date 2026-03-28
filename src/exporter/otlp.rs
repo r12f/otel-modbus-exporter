@@ -557,30 +557,7 @@ impl super::MetricExporter for OtlpMetricExporter {
         metrics: &[MetricConfig],
         results: &HashMap<String, Result<f64>>,
     ) -> Result<()> {
-        // Convert (MetricConfig, results) into MetricValue list the existing
-        // protobuf builder understands.
-        let now = SystemTime::now();
-        let metric_values: Vec<MetricValue> = metrics
-            .iter()
-            .filter_map(|cfg| {
-                let value = match results.get(&cfg.name) {
-                    Some(Ok(v)) => *v,
-                    _ => return None,
-                };
-                Some(MetricValue {
-                    name: cfg.name.clone(),
-                    value,
-                    metric_type: match cfg.metric_type {
-                        crate::config::MetricType::Gauge => MetricType::Gauge,
-                        crate::config::MetricType::Counter => MetricType::Counter,
-                    },
-                    labels: std::collections::BTreeMap::new(),
-                    description: cfg.description.clone(),
-                    unit: cfg.unit.clone(),
-                    updated_at: now,
-                })
-            })
-            .collect();
+        let metric_values = super::results_to_metric_values(metrics, results);
 
         if metric_values.is_empty() {
             return Ok(());
