@@ -41,7 +41,7 @@ pub mod linux_device {
         }
 
         pub fn open(&mut self) -> Result<()> {
-            use spidev::{Spidev, SpidevOptions, SpiModeFlags};
+            use spidev::{SpiModeFlags, Spidev, SpidevOptions};
 
             let mut spi = Spidev::open(&self.device_path)
                 .with_context(|| format!("opening SPI device {}", self.device_path))?;
@@ -79,8 +79,7 @@ pub mod linux_device {
 
             let mut rx_buf = vec![0u8; tx_buf.len()];
             let mut transfer = SpidevTransfer::read_write(tx_buf, &mut rx_buf);
-            spi.transfer(&mut transfer)
-                .context("SPI transfer failed")?;
+            spi.transfer(&mut transfer).context("SPI transfer failed")?;
             Ok(rx_buf)
         }
     }

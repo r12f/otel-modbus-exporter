@@ -49,9 +49,8 @@ pub mod linux_device {
                 .open(&self.bus_path)
                 .with_context(|| format!("opening I2C bus {}", self.bus_path))?;
 
-            let ret = unsafe {
-                libc::ioctl(file.as_raw_fd(), I2C_SLAVE, self.address as libc::c_ulong)
-            };
+            let ret =
+                unsafe { libc::ioctl(file.as_raw_fd(), I2C_SLAVE, self.address as libc::c_ulong) };
             if ret < 0 {
                 anyhow::bail!(
                     "ioctl I2C_SLAVE failed for address {:#04x} on {}",
@@ -121,7 +120,10 @@ impl I2cClient {
 
     /// Read bytes from a register address on the I2C device.
     pub fn read_register_sync(&self, register: u8, byte_count: usize) -> Result<Vec<u8>> {
-        let mut dev = self.device.lock().map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+        let mut dev = self
+            .device
+            .lock()
+            .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
         dev.write_read(&[register], byte_count)
     }
 }
@@ -149,15 +151,18 @@ pub async fn read_i2c_metric(
     let address = client.address;
 
     let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let _lock = bus_lock.lock().map_err(|e| anyhow::anyhow!("bus lock poisoned: {e}"))?;
-        let mut dev = device.lock().map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
-        dev.write_read(&[register], num_bytes)
-            .with_context(|| {
-                format!(
-                    "reading I2C register {:#04x} ({} bytes) from device {:#04x} on {}",
-                    register, num_bytes, address, bus_path
-                )
-            })
+        let _lock = bus_lock
+            .lock()
+            .map_err(|e| anyhow::anyhow!("bus lock poisoned: {e}"))?;
+        let mut dev = device
+            .lock()
+            .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+        dev.write_read(&[register], num_bytes).with_context(|| {
+            format!(
+                "reading I2C register {:#04x} ({} bytes) from device {:#04x} on {}",
+                register, num_bytes, address, bus_path
+            )
+        })
     })
     .await
     .context("spawn_blocking join error")??;

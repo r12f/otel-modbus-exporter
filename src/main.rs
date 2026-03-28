@@ -35,7 +35,10 @@ impl BusClientFactory for RealBusClientFactory {
         match &collector.protocol {
             Protocol::ModbusTcp { endpoint } => {
                 let slave_id = collector.slave_id.unwrap_or(1);
-                Ok(BusClient::Modbus(Box::new(TcpClient::new(endpoint.clone(), slave_id))))
+                Ok(BusClient::Modbus(Box::new(TcpClient::new(
+                    endpoint.clone(),
+                    slave_id,
+                ))))
             }
             Protocol::ModbusRtu {
                 device,
@@ -61,7 +64,9 @@ impl BusClientFactory for RealBusClientFactory {
                         config::Parity::Even => tokio_serial::Parity::Even,
                         config::Parity::Odd => tokio_serial::Parity::Odd,
                     });
-                Ok(BusClient::Modbus(Box::new(RtuClient::new(builder, slave_id))))
+                Ok(BusClient::Modbus(Box::new(RtuClient::new(
+                    builder, slave_id,
+                ))))
             }
             Protocol::I2c { bus, address } => {
                 // Use real LinuxI2cDevice on Linux, StubI2cDevice otherwise

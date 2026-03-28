@@ -80,14 +80,20 @@ pub fn decode_bytes(
 
     let raw: f64 = match data_type {
         DataType::Bool => {
-            if bytes[0] & 0x01 != 0 { 1.0 } else { 0.0 }
+            if bytes[0] & 0x01 != 0 {
+                1.0
+            } else {
+                0.0
+            }
         }
         DataType::U8 => f64::from(bytes[0]),
         DataType::U16 => {
             let b = &bytes[..2];
             let val = match byte_order {
                 ByteOrder::BigEndian | ByteOrder::MidBigEndian => u16::from_be_bytes([b[0], b[1]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => u16::from_le_bytes([b[0], b[1]]),
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    u16::from_le_bytes([b[0], b[1]])
+                }
             };
             f64::from(val)
         }
@@ -95,55 +101,81 @@ pub fn decode_bytes(
             let b = &bytes[..2];
             let val = match byte_order {
                 ByteOrder::BigEndian | ByteOrder::MidBigEndian => i16::from_be_bytes([b[0], b[1]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => i16::from_le_bytes([b[0], b[1]]),
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    i16::from_le_bytes([b[0], b[1]])
+                }
             };
             f64::from(val)
         }
         DataType::U32 => {
             let b = &bytes[..4];
             let val = match byte_order {
-                ByteOrder::BigEndian | ByteOrder::MidBigEndian => u32::from_be_bytes([b[0], b[1], b[2], b[3]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                ByteOrder::BigEndian | ByteOrder::MidBigEndian => {
+                    u32::from_be_bytes([b[0], b[1], b[2], b[3]])
+                }
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                }
             };
             f64::from(val)
         }
         DataType::I32 => {
             let b = &bytes[..4];
             let val = match byte_order {
-                ByteOrder::BigEndian | ByteOrder::MidBigEndian => i32::from_be_bytes([b[0], b[1], b[2], b[3]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => i32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                ByteOrder::BigEndian | ByteOrder::MidBigEndian => {
+                    i32::from_be_bytes([b[0], b[1], b[2], b[3]])
+                }
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    i32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                }
             };
             f64::from(val)
         }
         DataType::F32 => {
             let b = &bytes[..4];
             let val = match byte_order {
-                ByteOrder::BigEndian | ByteOrder::MidBigEndian => f32::from_be_bytes([b[0], b[1], b[2], b[3]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => f32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                ByteOrder::BigEndian | ByteOrder::MidBigEndian => {
+                    f32::from_be_bytes([b[0], b[1], b[2], b[3]])
+                }
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    f32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                }
             };
             f64::from(val)
         }
         DataType::U64 => {
             let b = &bytes[..8];
             let val = match byte_order {
-                ByteOrder::BigEndian | ByteOrder::MidBigEndian => u64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]),
+                ByteOrder::BigEndian | ByteOrder::MidBigEndian => {
+                    u64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+                }
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+                }
             };
             val as f64
         }
         DataType::I64 => {
             let b = &bytes[..8];
             let val = match byte_order {
-                ByteOrder::BigEndian | ByteOrder::MidBigEndian => i64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => i64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]),
+                ByteOrder::BigEndian | ByteOrder::MidBigEndian => {
+                    i64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+                }
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    i64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+                }
             };
             val as f64
         }
         DataType::F64 => {
             let b = &bytes[..8];
             match byte_order {
-                ByteOrder::BigEndian | ByteOrder::MidBigEndian => f64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]),
-                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => f64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]),
+                ByteOrder::BigEndian | ByteOrder::MidBigEndian => {
+                    f64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+                }
+                ByteOrder::LittleEndian | ByteOrder::MidLittleEndian => {
+                    f64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+                }
             }
         }
     };

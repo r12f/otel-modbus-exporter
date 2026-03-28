@@ -270,10 +270,7 @@ pub enum Protocol {
         parity: Parity,
     },
     #[serde(rename = "i2c")]
-    I2c {
-        bus: String,
-        address: u8,
-    },
+    I2c { bus: String, address: u8 },
     #[serde(rename = "spi")]
     Spi {
         device: String,
@@ -673,11 +670,7 @@ impl Config {
                     // slave_id required for Modbus
                     match c.slave_id {
                         Some(id) if id == 0 || id > 247 => {
-                            bail!(
-                                "collector '{}': slave_id must be 1-247, got {}",
-                                c.name,
-                                id
-                            );
+                            bail!("collector '{}': slave_id must be 1-247, got {}", c.name, id);
                         }
                         None => {
                             bail!(
@@ -706,11 +699,7 @@ impl Config {
                     // slave_id required for Modbus
                     match c.slave_id {
                         Some(id) if id == 0 || id > 247 => {
-                            bail!(
-                                "collector '{}': slave_id must be 1-247, got {}",
-                                c.name,
-                                id
-                            );
+                            bail!("collector '{}': slave_id must be 1-247, got {}", c.name, id);
                         }
                         None => {
                             bail!(
@@ -737,10 +726,7 @@ impl Config {
                 }
                 Protocol::I2c { bus, address } => {
                     if bus.is_empty() {
-                        bail!(
-                            "collector '{}': I2C bus path must not be empty",
-                            c.name
-                        );
+                        bail!("collector '{}': I2C bus path must not be empty", c.name);
                     }
                     if *address < 0x03 || *address > 0x77 {
                         bail!(
@@ -757,23 +743,13 @@ impl Config {
                     bits_per_word,
                 } => {
                     if device.is_empty() {
-                        bail!(
-                            "collector '{}': SPI device path must not be empty",
-                            c.name
-                        );
+                        bail!("collector '{}': SPI device path must not be empty", c.name);
                     }
                     if *speed_hz == 0 {
-                        bail!(
-                            "collector '{}': SPI speed_hz must be > 0",
-                            c.name
-                        );
+                        bail!("collector '{}': SPI speed_hz must be > 0", c.name);
                     }
                     if *mode > 3 {
-                        bail!(
-                            "collector '{}': SPI mode must be 0-3, got {}",
-                            c.name,
-                            mode
-                        );
+                        bail!("collector '{}': SPI mode must be 0-3, got {}", c.name, mode);
                     }
                     if *bits_per_word == 0 || *bits_per_word > 32 {
                         bail!(
@@ -869,7 +845,10 @@ impl Config {
                         );
                     }
                     // Mid-endian byte orders are Modbus-specific (word-swapped)
-                    if matches!(m.byte_order, ByteOrder::MidBigEndian | ByteOrder::MidLittleEndian) {
+                    if matches!(
+                        m.byte_order,
+                        ByteOrder::MidBigEndian | ByteOrder::MidLittleEndian
+                    ) {
                         bail!(
                             "collector '{}', metric '{}': mid-endian byte order is not supported for I2C (Modbus-specific)",
                             c.name,
@@ -887,7 +866,10 @@ impl Config {
                         );
                     }
                     // Mid-endian byte orders are Modbus-specific
-                    if matches!(m.byte_order, ByteOrder::MidBigEndian | ByteOrder::MidLittleEndian) {
+                    if matches!(
+                        m.byte_order,
+                        ByteOrder::MidBigEndian | ByteOrder::MidLittleEndian
+                    ) {
                         bail!(
                             "collector '{}', metric '{}': mid-endian byte order is not supported for SPI (Modbus-specific)",
                             c.name,
@@ -937,7 +919,10 @@ impl Config {
                 }
                 // Warn if byte_order is set to non-default for single-register types
                 // (byte_order is meaningless for u16/i16/bool which occupy only 1 register)
-                if is_modbus && m.data_type.register_count() == 1 && m.byte_order != ByteOrder::BigEndian {
+                if is_modbus
+                    && m.data_type.register_count() == 1
+                    && m.byte_order != ByteOrder::BigEndian
+                {
                     eprintln!(
                         "warning: collector '{}', metric '{}': byte_order has no effect for single-register type {:?}",
                         c.name, m.name, m.data_type

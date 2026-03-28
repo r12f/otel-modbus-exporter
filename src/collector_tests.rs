@@ -137,7 +137,8 @@ struct MockFactory {
 
 impl BusClientFactory for MockFactory {
     fn create(&self, _collector: &Collector) -> anyhow::Result<BusClient> {
-        let client = self.clients
+        let client = self
+            .clients
             .lock()
             .unwrap()
             .pop()

@@ -119,7 +119,13 @@ async fn test_read_f32() {
     let device = MockSpiDevice::new(responses);
     let client = SpiClient::new(Box::new(device), "/dev/spidev0.0".into());
 
-    let metric = make_spi_metric("pressure", vec![0x01, 0x00, 0x00, 0x00], Some(4), 0, DataType::F32);
+    let metric = make_spi_metric(
+        "pressure",
+        vec![0x01, 0x00, 0x00, 0x00],
+        Some(4),
+        0,
+        DataType::F32,
+    );
     let lock = make_device_lock();
     let result = read_spi_metric(&client, &metric, &lock).await.unwrap();
     assert!((result - 3.14_f64).abs() < 0.001);

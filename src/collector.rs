@@ -142,9 +142,7 @@ async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> 
 async fn read_bus_metric(client: &mut BusClient, metric: &config::Metric) -> Result<f64> {
     match client {
         BusClient::Modbus(c) => read_metric(c.as_mut(), metric).await,
-        BusClient::I2c { client, bus_lock } => {
-            i2c::read_i2c_metric(client, metric, bus_lock).await
-        }
+        BusClient::I2c { client, bus_lock } => i2c::read_i2c_metric(client, metric, bus_lock).await,
         BusClient::Spi {
             client,
             device_lock,
