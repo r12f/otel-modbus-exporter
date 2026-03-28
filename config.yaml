@@ -44,7 +44,7 @@ collectors:
   # ---- TCP example --------------------------------------------------------
   - name: plc-east
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "192.168.1.10:502"
     slave_id: 1
     poll_interval: 5s
@@ -90,7 +90,7 @@ collectors:
   # ---- RTU example (commented out) ----------------------------------------
   # - name: inverter-south
   #   protocol:
-  #     type: rtu
+  #     type: modbus-rtu
   #     port: /dev/ttyUSB0
   #     baud_rate: 9600
   #     data_bits: 8

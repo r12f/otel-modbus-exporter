@@ -21,7 +21,7 @@ exporters:
 collectors:
   - name: test_device
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "modbus-simulator:5020"
     slave_id: 1
     polling_interval: "2s"

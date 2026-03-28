@@ -9,7 +9,7 @@ exporters:
 collectors:
   - name: test
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "localhost:502"
     slave_id: 1
     metrics:
@@ -65,7 +65,7 @@ exporters:
 collectors:
   - name: inv
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "192.168.1.10:502"
     slave_id: 1
     polling_interval: "5s"
@@ -84,7 +84,7 @@ collectors:
         unit: "V"
   - name: meter
     protocol:
-      type: rtu
+      type: modbus-rtu
       device: "/dev/ttyUSB0"
       bps: 19200
       data_bits: 8
@@ -105,7 +105,7 @@ collectors:
     assert_eq!(c.logging.syslog_facility, SyslogFacility::Local0);
     assert_eq!(c.collectors.len(), 2);
     match &c.collectors[1].protocol {
-        Protocol::Rtu { bps, parity, .. } => {
+        Protocol::ModbusRtu { bps, parity, .. } => {
             assert_eq!(*bps, 19200);
             assert_eq!(*parity, Parity::Even);
         }
@@ -121,7 +121,7 @@ exporters:
     enabled: false
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics:
       - { name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }
@@ -148,11 +148,11 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: d
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics: [{ name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }]
   - name: d
-    protocol: { type: tcp, endpoint: "b:502" }
+    protocol: { type: modbus-tcp, endpoint: "b:502" }
     slave_id: 2
     metrics: [{ name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }]
 "#;
@@ -178,7 +178,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: gauge, register_type: coil, address: 0, data_type: u16 }
@@ -196,7 +196,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: gauge, register_type: holding, address: 0, data_type: bool }
@@ -214,7 +214,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: d, type: gauge, register_type: holding, address: 0, data_type: u16 }
@@ -236,7 +236,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics: []
 "#;
@@ -253,7 +253,7 @@ exporters:
   otlp: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }
@@ -279,14 +279,14 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: rtu, device: "/dev/ttyUSB0" }
+    protocol: { type: modbus-rtu, device: "/dev/ttyUSB0" }
     slave_id: 1
     metrics:
       - { name: c, type: gauge, register_type: coil, address: 0, data_type: bool }
 "#;
     let c = parse(y).unwrap();
     match &c.collectors[0].protocol {
-        Protocol::Rtu {
+        Protocol::ModbusRtu {
             bps,
             data_bits,
             stop_bits,
@@ -311,7 +311,7 @@ exporters:
   prometheus: {{ enabled: true }}
 collectors:
   - name: t
-    protocol: {{ type: tcp, endpoint: "a:502" }}
+    protocol: {{ type: modbus-tcp, endpoint: "a:502" }}
     slave_id: 1
     metrics:
       - {{ name: m, type: gauge, register_type: holding, address: 0, data_type: {dt} }}
@@ -335,7 +335,7 @@ exporters:
   prometheus: {{ enabled: true }}
 collectors:
   - name: t
-    protocol: {{ type: tcp, endpoint: "a:502" }}
+    protocol: {{ type: modbus-tcp, endpoint: "a:502" }}
     slave_id: 1
     metrics:
       - {{ name: m, type: gauge, register_type: holding, address: 0, data_type: u32, byte_order: {bo} }}
@@ -357,7 +357,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }
@@ -374,7 +374,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }
@@ -391,7 +391,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }
@@ -413,7 +413,7 @@ exporters:
   prometheus: {{ enabled: true }}
 collectors:
   - name: t
-    protocol: {{ type: tcp, endpoint: "a:502" }}
+    protocol: {{ type: modbus-tcp, endpoint: "a:502" }}
     slave_id: 1
     metrics:
       - {{ name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }}
@@ -436,7 +436,7 @@ exporters:
   prometheus: {{ enabled: true }}
 collectors:
   - name: t
-    protocol: {{ type: tcp, endpoint: "a:502" }}
+    protocol: {{ type: modbus-tcp, endpoint: "a:502" }}
     slave_id: 1
     metrics:
       - {{ name: v, type: gauge, register_type: holding, address: 0, data_type: u16 }}
@@ -453,7 +453,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: rtu, device: "/dev/ttyUSB0", data_bits: 4 }
+    protocol: { type: modbus-rtu, device: "/dev/ttyUSB0", data_bits: 4 }
     slave_id: 1
     metrics:
       - { name: c, type: gauge, register_type: coil, address: 0, data_type: bool }
@@ -471,7 +471,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: rtu, device: "/dev/ttyUSB0", stop_bits: 3 }
+    protocol: { type: modbus-rtu, device: "/dev/ttyUSB0", stop_bits: 3 }
     slave_id: 1
     metrics:
       - { name: c, type: gauge, register_type: coil, address: 0, data_type: bool }
@@ -489,7 +489,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: v, type: gauge, register_type: holding, address: 0, data_type: u16, scale: 0.0 }
@@ -507,7 +507,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     polling_interval: "0s"
     metrics:
@@ -526,7 +526,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     polling_interval: "50ms"
     metrics:
@@ -545,7 +545,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     polling_interval: "100ms"
     metrics:
@@ -561,7 +561,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: counter, register_type: coil, address: 0, data_type: bool }
@@ -579,7 +579,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: counter, register_type: discrete, address: 0, data_type: bool }
@@ -597,7 +597,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: gauge, register_type: holding, address: 65535, data_type: u32 }
@@ -612,7 +612,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: gauge, register_type: holding, address: 65533, data_type: u64 }
@@ -628,7 +628,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: gauge, register_type: holding, address: 65534, data_type: u32 }
@@ -644,7 +644,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: t
-    protocol: { type: tcp, endpoint: "a:502" }
+    protocol: { type: modbus-tcp, endpoint: "a:502" }
     slave_id: 1
     metrics:
       - { name: m, type: gauge, register_type: holding, address: 65535, data_type: u16 }
@@ -693,7 +693,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "devices/meter.yaml"
@@ -750,7 +750,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "base.yaml"
@@ -799,7 +799,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "meter.yaml"
@@ -854,7 +854,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "base.yaml"
@@ -889,7 +889,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "subdir/devices/meter.yaml"
@@ -907,7 +907,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "nonexistent.yaml"
@@ -930,7 +930,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "empty.yaml"
@@ -974,7 +974,7 @@ exporters:
   prometheus: { enabled: true }
 collectors:
   - name: test
-    protocol: { type: tcp, endpoint: "localhost:502" }
+    protocol: { type: modbus-tcp, endpoint: "localhost:502" }
     slave_id: 1
     metrics_files:
       - "meter.yaml"
@@ -1010,7 +1010,7 @@ exporters:
 collectors:
   - name: test
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "localhost:502"
     slave_id: 1
     metrics:
@@ -1101,7 +1101,7 @@ exporters:
 collectors:
   - name: test
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "localhost:502"
     slave_id: 1
     metrics_files:
@@ -1153,7 +1153,7 @@ exporters:
 collectors:
   - name: test
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "localhost:502"
     slave_id: 1
     metrics:
@@ -1187,7 +1187,7 @@ exporters:
 collectors:
   - name: test
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "localhost:502"
     slave_id: 1
     metrics:
@@ -1215,7 +1215,7 @@ exporters:
 collectors:
   - name: test
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "localhost:502"
     slave_id: 1
     metrics:

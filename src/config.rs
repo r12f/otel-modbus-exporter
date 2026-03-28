@@ -252,12 +252,12 @@ fn default_polling_interval() -> Duration {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type")]
 pub enum Protocol {
-    Tcp {
-        endpoint: String,
-    },
-    Rtu {
+    #[serde(rename = "modbus-tcp")]
+    ModbusTcp { endpoint: String },
+    #[serde(rename = "modbus-rtu")]
+    ModbusRtu {
         device: String,
         #[serde(default = "default_bps")]
         bps: u32,
@@ -639,7 +639,7 @@ impl Config {
                 );
             }
             // Validate TCP endpoint format (must be parseable as host:port)
-            if let Protocol::Tcp { endpoint } = &c.protocol {
+            if let Protocol::ModbusTcp { endpoint } = &c.protocol {
                 // Must contain at least one colon separating host from port,
                 // and the port part must be a valid u16.
                 let valid = endpoint
@@ -654,7 +654,7 @@ impl Config {
                 }
             }
             // Validate RTU data_bits and stop_bits ranges
-            if let Protocol::Rtu {
+            if let Protocol::ModbusRtu {
                 data_bits,
                 stop_bits,
                 ..

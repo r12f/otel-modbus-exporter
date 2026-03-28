@@ -106,7 +106,7 @@ impl ModbusReader for MockModbusClient {
 fn test_collector_config(name: &str) -> Collector {
     Collector {
         name: name.to_string(),
-        protocol: Protocol::Tcp {
+        protocol: Protocol::ModbusTcp {
             endpoint: "127.0.0.1:502".to_string(),
         },
         slave_id: 1,

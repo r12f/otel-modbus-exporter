@@ -30,10 +30,10 @@ struct RealModbusClientFactory;
 impl ModbusClientFactory for RealModbusClientFactory {
     fn create(&self, collector: &config::Collector) -> Box<dyn modbus::ModbusClient> {
         match &collector.protocol {
-            Protocol::Tcp { endpoint } => {
+            Protocol::ModbusTcp { endpoint } => {
                 Box::new(TcpClient::new(endpoint.clone(), collector.slave_id))
             }
-            Protocol::Rtu {
+            Protocol::ModbusRtu {
                 device,
                 bps,
                 data_bits,

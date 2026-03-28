@@ -109,14 +109,14 @@ A collector must have at least one metric after merging `metrics_files` and `met
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `type` | `string` | Yes | — | Must be `"tcp"` |
+| `type` | `string` | Yes | — | Must be `"modbus-tcp"` |
 | `endpoint` | `string` | Yes | — | `host:port` |
 
 #### RTU
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `type` | `string` | Yes | — | Must be `"rtu"` |
+| `type` | `string` | Yes | — | Must be `"modbus-rtu"` |
 | `device` | `string` | Yes | — | Serial device path (e.g., `/dev/ttyUSB0`) |
 | `bps` | `u32` | No | `9600` | Baud rate |
 | `data_bits` | `u8` | No | `8` | Data bits (5-8) |
@@ -215,7 +215,7 @@ metrics:
 # config.yaml
 collectors:
   - name: meter1
-    protocol: { type: tcp, endpoint: "192.168.1.10:502" }
+    protocol: { type: modbus-tcp, endpoint: "192.168.1.10:502" }
     slave_id: 1
     metrics_files:
       - "devices/base.yaml"       # loaded first

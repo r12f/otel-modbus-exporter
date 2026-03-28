@@ -21,7 +21,7 @@ exporters:
 collectors:
   - name: dev1
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "127.0.0.1:502"
     slave_id: 1
     polling_interval: "1s"
@@ -60,7 +60,7 @@ exporters:
 collectors:
   - name: dev1
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "127.0.0.1:502"
     slave_id: 1
     polling_interval: "1s"

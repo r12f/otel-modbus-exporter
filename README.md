@@ -57,7 +57,7 @@ exporters:
 collectors:
   - name: "power-meter"
     protocol:
-      type: tcp
+      type: modbus-tcp
       endpoint: "192.168.1.100:502"
     slave_id: 1
     polling_interval: "5s"
