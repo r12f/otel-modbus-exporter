@@ -16,8 +16,8 @@ pub struct CollectorStats {
     pub polls_total: AtomicU64,
     pub polls_success: AtomicU64,
     pub polls_error: AtomicU64,
-    pub modbus_requests: AtomicU64,
-    pub modbus_errors: AtomicU64,
+    pub read_requests: AtomicU64,
+    pub read_errors: AtomicU64,
     /// Last poll duration stored as f64 bits via `AtomicU64`.
     pub last_poll_duration_secs: AtomicU64,
 }
@@ -34,8 +34,8 @@ impl CollectorStats {
             polls_total: AtomicU64::new(0),
             polls_success: AtomicU64::new(0),
             polls_error: AtomicU64::new(0),
-            modbus_requests: AtomicU64::new(0),
-            modbus_errors: AtomicU64::new(0),
+            read_requests: AtomicU64::new(0),
+            read_errors: AtomicU64::new(0),
             last_poll_duration_secs: AtomicU64::new(0f64.to_bits()),
         }
     }
@@ -168,24 +168,28 @@ impl InternalMetrics {
                 }
             }
 
-            buf.push_str("# HELP bus_exporter_modbus_requests_total Total Modbus register read requests per collector\n");
+            buf.push_str(
+                "# HELP bus_exporter_modbus_requests_total Total read requests per collector\n",
+            );
             buf.push_str("# TYPE bus_exporter_modbus_requests_total counter\n");
             for c in &collectors {
                 if let Some(s) = self.collector_stats.get(c) {
                     buf.push_str(&format!(
                         "bus_exporter_modbus_requests_total{{collector=\"{c}\"}} {}\n",
-                        s.modbus_requests.load(ORD)
+                        s.read_requests.load(ORD)
                     ));
                 }
             }
 
-            buf.push_str("# HELP bus_exporter_modbus_errors_total Failed Modbus register read requests per collector\n");
+            buf.push_str(
+                "# HELP bus_exporter_modbus_errors_total Failed read requests per collector\n",
+            );
             buf.push_str("# TYPE bus_exporter_modbus_errors_total counter\n");
             for c in &collectors {
                 if let Some(s) = self.collector_stats.get(c) {
                     buf.push_str(&format!(
                         "bus_exporter_modbus_errors_total{{collector=\"{c}\"}} {}\n",
-                        s.modbus_errors.load(ORD)
+                        s.read_errors.load(ORD)
                     ));
                 }
             }
@@ -282,13 +286,13 @@ impl InternalMetrics {
                 ),
                 (
                     "bus_exporter_modbus_requests_total",
-                    s.modbus_requests.load(ORD),
-                    "Total Modbus register read requests per collector",
+                    s.read_requests.load(ORD),
+                    "Total read requests per collector",
                 ),
                 (
                     "bus_exporter_modbus_errors_total",
-                    s.modbus_errors.load(ORD),
-                    "Failed Modbus register read requests per collector",
+                    s.read_errors.load(ORD),
+                    "Failed read requests per collector",
                 ),
             ];
 

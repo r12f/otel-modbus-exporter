@@ -18,14 +18,14 @@ fn test_collector_stats_increments() {
     stats.polls_total.fetch_add(1, Relaxed);
     stats.polls_success.fetch_add(1, Relaxed);
     stats.polls_error.fetch_add(1, Relaxed);
-    stats.modbus_requests.fetch_add(5, Relaxed);
-    stats.modbus_errors.fetch_add(2, Relaxed);
+    stats.read_requests.fetch_add(5, Relaxed);
+    stats.read_errors.fetch_add(2, Relaxed);
 
     assert_eq!(stats.polls_total.load(Relaxed), 2);
     assert_eq!(stats.polls_success.load(Relaxed), 1);
     assert_eq!(stats.polls_error.load(Relaxed), 1);
-    assert_eq!(stats.modbus_requests.load(Relaxed), 5);
-    assert_eq!(stats.modbus_errors.load(Relaxed), 2);
+    assert_eq!(stats.read_requests.load(Relaxed), 5);
+    assert_eq!(stats.read_errors.load(Relaxed), 2);
 }
 
 #[test]
@@ -72,8 +72,8 @@ fn test_render_prometheus_contains_expected_metrics() {
         s.polls_total.store(42, Relaxed);
         s.polls_success.store(40, Relaxed);
         s.polls_error.store(2, Relaxed);
-        s.modbus_requests.store(100, Relaxed);
-        s.modbus_errors.store(3, Relaxed);
+        s.read_requests.store(100, Relaxed);
+        s.read_errors.store(3, Relaxed);
         s.set_poll_duration(0.5);
     }
 

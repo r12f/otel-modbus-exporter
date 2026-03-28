@@ -20,8 +20,8 @@ All internal metrics use the prefix `bus_exporter_` to distinguish them from dev
 | `bus_exporter_polls_total` | Counter | `collector` | Total number of poll cycles executed per collector |
 | `bus_exporter_polls_success_total` | Counter | `collector` | Number of fully successful poll cycles (all metrics read) |
 | `bus_exporter_polls_error_total` | Counter | `collector` | Number of poll cycles with at least one metric read failure |
-| `bus_exporter_modbus_requests_total` | Counter | `collector` | Total number of individual Modbus register read requests |
-| `bus_exporter_modbus_errors_total` | Counter | `collector` | Total number of failed Modbus register read requests |
+| `bus_exporter_modbus_requests_total` | Counter | `collector` | Total number of individual read requests |
+| `bus_exporter_modbus_errors_total` | Counter | `collector` | Total number of failed read requests |
 | `bus_exporter_poll_duration_seconds` | Gauge | `collector` | Duration of the last poll cycle in seconds |
 
 ### Export Metrics
@@ -58,15 +58,15 @@ pub struct CollectorStats {
     pub polls_total: AtomicU64,
     pub polls_success: AtomicU64,
     pub polls_error: AtomicU64,
-    pub modbus_requests: AtomicU64,
-    pub modbus_errors: AtomicU64,
+    pub read_requests: AtomicU64,
+    pub read_errors: AtomicU64,
     pub last_poll_duration_secs: AtomicF64,
 }
 ```
 
 ### Integration Points
 
-1. **Collector poll loop** — At start of each poll cycle, increment `polls_total`. After completion, increment `polls_success` or `polls_error`. For each Modbus read, increment `modbus_requests` (and `modbus_errors` on failure). Record poll duration.
+1. **Collector poll loop** — At start of each poll cycle, increment `polls_total`. After completion, increment `polls_success` or `polls_error`. For each read, increment `read_requests` (and `read_errors` on failure). Record poll duration.
 
 2. **OTLP exporter** — Increment `otlp_exports_total` on each export attempt, `otlp_errors_total` on failure.
 
