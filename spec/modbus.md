@@ -1,8 +1,14 @@
 # Modbus Client Specification
 
+> Part of the [bus-exporter architecture](../README.md#architecture). Modbus readers implement the `MetricReader` trait.
+
 ## Overview
 
 The Modbus module provides async clients for RTU (serial) and TCP protocols, abstracting the differences behind a common trait.
+
+### Batch Read
+
+When `batch_read: true` is set in the protocol config, the Modbus reader coalesces adjacent/overlapping register ranges into fewer bus calls. This reduces polling overhead for devices with many contiguous registers. Batch read is disabled by default.
 
 ## Modbus RTU Client
 

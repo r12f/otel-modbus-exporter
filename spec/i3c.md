@@ -1,5 +1,7 @@
 # I3C Client Specification
 
+> Part of the [bus-exporter architecture](../README.md#architecture). The I3C reader implements the `MetricReader` trait.
+
 ## Overview
 
 The I3C module provides an async client for reading data from I3C devices on Linux.

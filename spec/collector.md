@@ -2,17 +2,17 @@
 
 ## Overview
 
-Each collector runs as an independent async task (tokio::spawn) that periodically polls a Modbus device and updates the in-memory metric store.
+Each collector runs as an independent async task (tokio::spawn) that periodically polls a device via its [`MetricReader`](reader.md) and updates the in-memory metric store. The collector doesn't know the underlying protocol — it works through the common reader interface.
 
 ## Per-Collector Cache
 
 Each collector maintains its own **local cache** (`CollectorCache`) — a `HashMap<String, MetricValue>` keyed by metric name. This cache holds the latest decoded values from the most recent successful poll cycle.
 
-After each complete poll cycle, the collector **atomically publishes** its cache snapshot to the shared `MetricStore` via `store.publish(collector_name, cache_snapshot)`. This is the **only write path** into the metric store. Exporters (OTLP, Prometheus) are pure readers — they never trigger Modbus calls.
+After each complete poll cycle, the collector **atomically publishes** its cache snapshot to the shared `MetricStore` via `store.publish(collector_name, cache_snapshot)`. This is the **only write path** into the metric store. Exporters (OTLP, Prometheus, MQTT) are pure readers — they never trigger bus calls.
 
 This strict **producer/consumer separation** ensures:
 
-- Modbus I/O is fully contained within collector tasks.
+- Bus I/O is fully contained within collector tasks.
 - Exporters see a consistent snapshot, never partial poll results.
 - A slow or failing collector cannot block or delay metric export.
 

@@ -1,6 +1,6 @@
 # Project Structure Specification
 
-## Planned File Tree
+## File Tree
 
 ```text
 bus-exporter/
@@ -8,68 +8,85 @@ bus-exporter/
 │   └── workflows/
 │       ├── ci.yml
 │       └── publish.yml
-├── .pre-commit-config.yaml
 ├── Cargo.toml
 ├── Dockerfile
 ├── LICENSE
 ├── Makefile
 ├── README.md
-├── config.yaml                  # Example config
 ├── config/
-│   ├── test.yaml                # Exporter config for E2E tests
-│   └── modbus-simulator.json    # Simulator register config for E2E tests
-├── docker-compose.test.yml      # E2E test compose stack
+│   ├── example.yaml
+│   ├── test.yaml
+│   └── devices/
+│       └── sdm630.yaml
 ├── spec/
 │   ├── ci.md
 │   ├── collector.md
 │   ├── config.md
 │   ├── decoder.md
 │   ├── docker.md
+│   ├── e2e-testing.md
+│   ├── export-mqtt.md
 │   ├── export-otlp.md
 │   ├── export-prometheus.md
+│   ├── i2c.md
+│   ├── i3c.md
+│   ├── internal-metrics.md
 │   ├── logging.md
 │   ├── metrics.md
 │   ├── modbus.md
 │   ├── project-structure.md
 │   ├── publish.md
-│   ├── testing.md
-│   └── e2e-testing.md
+│   ├── reader.md
+│   ├── spi.md
+│   └── testing.md
 ├── src/
-│   ├── main.rs                  # CLI entry point, config loading, task orchestration
-│   ├── main_tests.rs
-│   ├── config.rs                # Config structs, YAML deserialization, validation
+│   ├── main.rs
+│   ├── lib.rs
+│   ├── config.rs
 │   ├── config_tests.rs
-│   ├── modbus/
-│   │   ├── mod.rs               # ModbusClient trait
-│   │   ├── mod_tests.rs
-│   │   ├── tcp.rs               # TCP client impl
-│   │   ├── tcp_tests.rs
-│   │   ├── rtu.rs               # RTU client impl
-│   │   └── rtu_tests.rs
-│   ├── i2c/
-│   │   ├── mod.rs              # I2C client impl
-│   │   └── mod_tests.rs
-│   ├── spi/
-│   │   ├── mod.rs              # SPI client impl
-│   │   └── mod_tests.rs
-│   ├── decoder.rs               # Byte order reordering, type conversion, scale/offset
+│   ├── reader/
+│   │   ├── mod.rs              # MetricReader trait, ReaderCapabilities
+│   │   ├── modbus/
+│   │   │   ├── mod.rs          # Modbus MetricReader impl
+│   │   │   ├── mod_tests.rs
+│   │   │   ├── tcp.rs          # TCP transport
+│   │   │   ├── tcp_tests.rs
+│   │   │   ├── rtu.rs          # RTU transport
+│   │   │   └── rtu_tests.rs
+│   │   ├── i2c/
+│   │   │   ├── mod.rs
+│   │   │   └── mod_tests.rs
+│   │   ├── spi/
+│   │   │   ├── mod.rs
+│   │   │   └── mod_tests.rs
+│   │   └── i3c/
+│   │       ├── mod.rs
+│   │       └── mod_tests.rs
+│   ├── decoder.rs
 │   ├── decoder_tests.rs
-│   ├── logging.rs               # Tracing subscriber init, output layer setup
+│   ├── logging.rs
 │   ├── logging_tests.rs
-│   ├── collector.rs             # Poll engine, per-collector async task
+│   ├── collector.rs
 │   ├── collector_tests.rs
-│   ├── metrics.rs               # MetricStore, MetricKey, MetricValue
+│   ├── metrics.rs
 │   ├── metrics_tests.rs
-│   ├── export/
-│   │   ├── mod.rs               # Export trait and shared types
-│   │   ├── otlp.rs              # OTLP protobuf/HTTP exporter
-│   │   ├── otlp_tests.rs
-│   │   ├── prometheus.rs        # Prometheus /metrics HTTP server
-│   │   └── prometheus_tests.rs
-└── tests/
-    ├── integration_test.rs      # End-to-end with mock Modbus server
-    └── e2e/
-        └── run.sh               # E2E test script (docker-compose based)
+│   ├── internal_metrics.rs
+│   ├── internal_metrics_tests.rs
+│   └── exporter/
+│       ├── mod.rs
+│       ├── otlp.rs
+│       ├── otlp_tests.rs
+│       ├── prometheus.rs
+│       ├── prometheus_tests.rs
+│       ├── mqtt.rs
+│       └── mqtt_tests.rs
+├── tests/
+│   ├── integration_test.rs
+│   ├── e2e_modbus.rs
+│   └── e2e_i3c.rs
+└── assets/
+    ├── logo.svg
+    └── logo.png
 ```
 
 ## Module Dependency Graph
@@ -79,18 +96,18 @@ main
 ├── config
 ├── logging
 ├── collector
-│   ├── modbus (modbus::tcp, modbus::rtu)
-│   ├── i2c
-│   ├── spi
-│   ├── i3c
-│   ├── bus (shared helpers)
+│   ├── reader (MetricReader trait)
+│   │   ├── reader::modbus (tcp, rtu)
+│   │   ├── reader::i2c
+│   │   ├── reader::spi
+│   │   └── reader::i3c
 │   ├── decoder
 │   └── metrics
 ├── internal_metrics
-├── export::otlp
+├── exporter::otlp
 │   └── metrics
-├── export::prometheus
+├── exporter::prometheus
 │   └── metrics
-└── export::mqtt
+└── exporter::mqtt
     └── metrics
 ```

@@ -1,5 +1,7 @@
 # SPI Client Specification
 
+> Part of the [bus-exporter architecture](../README.md#architecture). The SPI reader implements the `MetricReader` trait.
+
 ## Overview
 
 The SPI module provides an async client for reading data from SPI devices on Linux.

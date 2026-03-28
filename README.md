@@ -33,7 +33,7 @@ Multi-arch images available: `linux/amd64` and `linux/arm64`. See the [Docker sp
 - **[Modbus RTU & TCP](spec/modbus.md)** — poll devices over serial (RS-485/RS-232) or Ethernet
 - **[I2C](spec/i2c.md)** — read sensors and peripherals on I2C buses (Linux)
 - **[SPI](spec/spi.md)** — read ADCs and peripherals via SPI (Linux)
-- **[I3C](spec/i3c.md)** *(planned)* — read sensors on I3C buses with dynamic addressing (Linux)
+- **[I3C](spec/i3c.md)** — read sensors on I3C buses with dynamic addressing (Linux)
 - **[Flexible decoding](spec/decoder.md)** — u16, i16, u32, i32, f32, u64, i64, f64, bool with configurable byte order and scale/offset transform
 - **[OTLP export](spec/export-otlp.md)** — push metrics to any OpenTelemetry Collector via protobuf/HTTP
 - **[Prometheus export](spec/export-prometheus.md)** — built-in `/metrics` HTTP endpoint for pull-based scraping
@@ -43,6 +43,28 @@ Multi-arch images available: `linux/amd64` and `linux/arm64`. See the [Docker sp
 - **[Internal metrics](spec/internal-metrics.md)** — self-observability: poll counts, error rates, uptime, and more
 - **[Structured logging](spec/logging.md)** — configurable log levels with tracing
 - **[CI/CD](spec/ci.md)** — lint, test, E2E, and [publish](spec/publish.md) pipelines
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Collector                      │
+│         (async polling + caching)                │
+│                      │                           │
+│              MetricReader trait                   │
+│         ┌────┬───┬───┬────┐                      │
+│         │    │   │   │    │                      │
+│       Modbus I2C SPI I3C ...                     │
+│      TCP/RTU                                     │
+└──────────────────┬──────────────────────────────┘
+                   │ cached metrics
+       ┌───────────┼───────────┐
+       │           │           │
+   Exporter    Exporter    Exporter
+    (OTLP)   (Prometheus)  (MQTT)
+```
+
+Each protocol implements the `MetricReader` trait (`read` + optional `batch_read`). The collector calls readers, caches results, and exporters read from cache. See protocol specs for details: [Modbus](spec/modbus.md) · [I2C](spec/i2c.md) · [SPI](spec/spi.md) · [I3C](spec/i3c.md).
 
 ## Configuration
 

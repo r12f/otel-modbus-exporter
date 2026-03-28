@@ -1,5 +1,7 @@
 # I2C Client Specification
 
+> Part of the [bus-exporter architecture](../README.md#architecture). The I2C reader implements the `MetricReader` trait.
+
 ## Overview
 
 The I2C module provides an async client for reading registers from I2C devices on Linux.
