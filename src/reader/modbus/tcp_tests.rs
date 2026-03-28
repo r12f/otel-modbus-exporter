@@ -1,5 +1,5 @@
 use super::TcpClient;
-use crate::modbus::{BusConnection, ModbusReader};
+use crate::reader::modbus::{BusConnection, ModbusReader};
 
 #[test]
 fn test_tcp_client_new_not_connected() {

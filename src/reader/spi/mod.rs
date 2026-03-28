@@ -182,7 +182,7 @@ pub async fn read_spi_metric(
 
 /// Connection/lifecycle trait impl for SpiClient (mirrors BusConnection).
 #[async_trait]
-impl crate::modbus::BusConnection for SpiClient {
+impl crate::reader::modbus::BusConnection for SpiClient {
     async fn connect(&mut self) -> Result<()> {
         self.connected = true;
         Ok(())

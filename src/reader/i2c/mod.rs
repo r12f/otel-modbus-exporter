@@ -178,7 +178,7 @@ pub async fn read_i2c_metric(
 
 /// Connection/lifecycle trait impl for I2cClient (mirrors BusConnection).
 #[async_trait]
-impl crate::modbus::BusConnection for I2cClient {
+impl crate::reader::modbus::BusConnection for I2cClient {
     async fn connect(&mut self) -> Result<()> {
         self.connected = true;
         Ok(())

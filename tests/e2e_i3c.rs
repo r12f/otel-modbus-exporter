@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bus_exporter::config::{ByteOrder, Config, DataType, Metric, MetricType};
-use bus_exporter::i3c::{AddressMode, I3cClient, I3cDevice};
+use bus_exporter::reader::i3c::{AddressMode, I3cClient, I3cDevice};
 
 // ── Mock Device ─────────────────────────────────────────────────────
 
@@ -165,7 +165,7 @@ async fn pipeline_u8_metric() {
         0.0,
     );
 
-    let val = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock)
+    let val = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 66.0).abs() < f64::EPSILON);
@@ -191,7 +191,7 @@ async fn pipeline_u16_big_endian_with_scale_offset() {
         -40.0,
     );
 
-    let val = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock)
+    let val = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - (-15.5)).abs() < 0.001);
@@ -217,7 +217,7 @@ async fn pipeline_u16_little_endian() {
         0.0,
     );
 
-    let val = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock)
+    let val = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 256.0).abs() < f64::EPSILON);
@@ -243,7 +243,7 @@ async fn pipeline_f32_big_endian() {
         0.0,
     );
 
-    let val = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock)
+    let val = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 42.0).abs() < 0.001);
@@ -286,7 +286,7 @@ async fn pipeline_pid_address_mode() {
         0.0,
     );
 
-    let val = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock)
+    let val = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 171.0).abs() < f64::EPSILON);
@@ -319,7 +319,7 @@ async fn pipeline_device_class_address_mode() {
         0.0,
     );
 
-    let val = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock)
+    let val = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 100.0).abs() < 0.001); // 200 * 0.5 = 100
@@ -345,10 +345,10 @@ async fn pipeline_multiple_metrics_sequential() {
     let m1 = make_metric("m1", 0x10, DataType::U8, ByteOrder::BigEndian, 1.0, 0.0);
     let m2 = make_metric("m2", 0x20, DataType::U16, ByteOrder::BigEndian, 1.0, 0.0);
 
-    let v1 = bus_exporter::i3c::read_i3c_metric(&client, &m1, &bus_lock)
+    let v1 = bus_exporter::reader::i3c::read_i3c_metric(&client, &m1, &bus_lock)
         .await
         .unwrap();
-    let v2 = bus_exporter::i3c::read_i3c_metric(&client, &m2, &bus_lock)
+    let v2 = bus_exporter::reader::i3c::read_i3c_metric(&client, &m2, &bus_lock)
         .await
         .unwrap();
 
@@ -423,7 +423,7 @@ async fn async_error_propagation() {
         0.0,
     );
 
-    let result = bus_exporter::i3c::read_i3c_metric(&client, &metric, &bus_lock).await;
+    let result = bus_exporter::reader::i3c::read_i3c_metric(&client, &metric, &bus_lock).await;
     assert!(result.is_err());
     // Error is wrapped in context; verify it propagates through the async path.
     let err_msg = format!("{:#}", result.unwrap_err());

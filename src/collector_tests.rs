@@ -2,7 +2,7 @@ use super::*;
 use crate::config::{
     ByteOrder, Collector, DataType, Metric, MetricType as ConfigMetricType, Protocol, RegisterType,
 };
-use crate::modbus::{BusConnection, ModbusReader};
+use crate::reader::modbus::{BusConnection, ModbusReader};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;

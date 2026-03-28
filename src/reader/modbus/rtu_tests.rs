@@ -1,5 +1,5 @@
 use super::RtuClient;
-use crate::modbus::{BusConnection, ModbusReader};
+use crate::reader::modbus::{BusConnection, ModbusReader};
 
 #[test]
 fn test_rtu_client_new_not_connected() {

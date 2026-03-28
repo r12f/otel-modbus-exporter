@@ -4,13 +4,10 @@ mod collector;
 mod config;
 mod decoder;
 mod exporter;
-mod i2c;
-mod i3c;
 mod internal_metrics;
 mod logging;
 mod metrics;
-mod modbus;
-mod spi;
+mod reader;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -25,7 +22,7 @@ use config::{find_config_file, Cli, Config, Protocol};
 use internal_metrics::InternalMetrics;
 use logging::{init_logging, LogOutput, LoggingConfig};
 use metrics::MetricStore;
-use modbus::{rtu::RtuClient, tcp::TcpClient};
+use reader::modbus::{rtu::RtuClient, tcp::TcpClient};
 
 // ── Real Modbus client factory ────────────────────────────────────────
 
@@ -72,17 +69,18 @@ impl BusClientFactory for RealBusClientFactory {
             Protocol::I2c { bus, address } => {
                 // Use real LinuxI2cDevice on Linux, StubI2cDevice otherwise
                 #[cfg(target_os = "linux")]
-                let device: Box<dyn i2c::I2cDevice> = {
-                    let mut dev = i2c::linux_device::LinuxI2cDevice::new(bus.clone(), *address);
+                let device: Box<dyn reader::i2c::I2cDevice> = {
+                    let mut dev =
+                        reader::i2c::linux_device::LinuxI2cDevice::new(bus.clone(), *address);
                     dev.open().context("failed to open I2C device")?;
                     Box::new(dev)
                 };
                 #[cfg(not(target_os = "linux"))]
-                let device: Box<dyn i2c::I2cDevice> = Box::new(i2c::StubI2cDevice);
+                let device: Box<dyn reader::i2c::I2cDevice> = Box::new(reader::i2c::StubI2cDevice);
 
-                let client = i2c::I2cClient::new(device, bus.clone(), *address);
+                let client = reader::i2c::I2cClient::new(device, bus.clone(), *address);
                 // Use shared per-bus lock via get_bus_lock
-                let bus_lock = i2c::get_bus_lock(bus);
+                let bus_lock = reader::i2c::get_bus_lock(bus);
                 Ok(BusClient::I2c { client, bus_lock })
             }
             Protocol::Spi {
@@ -92,8 +90,8 @@ impl BusClientFactory for RealBusClientFactory {
                 bits_per_word,
             } => {
                 #[cfg(target_os = "linux")]
-                let spi_device: Box<dyn spi::SpiDevice> = {
-                    let mut dev = spi::linux_device::LinuxSpiDevice::new(
+                let spi_device: Box<dyn reader::spi::SpiDevice> = {
+                    let mut dev = reader::spi::linux_device::LinuxSpiDevice::new(
                         device.clone(),
                         *speed_hz,
                         *mode,
@@ -103,10 +101,11 @@ impl BusClientFactory for RealBusClientFactory {
                     Box::new(dev)
                 };
                 #[cfg(not(target_os = "linux"))]
-                let spi_device: Box<dyn spi::SpiDevice> = Box::new(spi::StubSpiDevice);
+                let spi_device: Box<dyn reader::spi::SpiDevice> =
+                    Box::new(reader::spi::StubSpiDevice);
 
-                let client = spi::SpiClient::new(spi_device, device.clone());
-                let device_lock = spi::get_device_lock(device);
+                let client = reader::spi::SpiClient::new(spi_device, device.clone());
+                let device_lock = reader::spi::get_device_lock(device);
                 Ok(BusClient::Spi {
                     client,
                     device_lock,
@@ -120,27 +119,27 @@ impl BusClientFactory for RealBusClientFactory {
                 instance,
             } => {
                 let address_mode = if let Some(pid_str) = pid {
-                    i3c::AddressMode::Pid(pid_str.clone())
+                    reader::i3c::AddressMode::Pid(pid_str.clone())
                 } else if let Some(addr) = address {
-                    i3c::AddressMode::Static(*addr)
+                    reader::i3c::AddressMode::Static(*addr)
                 } else {
-                    i3c::AddressMode::DeviceClass {
+                    reader::i3c::AddressMode::DeviceClass {
                         class: device_class.clone().unwrap(),
                         instance: instance.unwrap(),
                     }
                 };
 
                 #[cfg(target_os = "linux")]
-                let device: Box<dyn i3c::I3cDevice> = {
-                    let mut dev = i3c::linux_device::LinuxI3cDevice::new(bus.clone());
+                let device: Box<dyn reader::i3c::I3cDevice> = {
+                    let mut dev = reader::i3c::linux_device::LinuxI3cDevice::new(bus.clone());
                     dev.open().context("failed to open I3C device")?;
                     Box::new(dev)
                 };
                 #[cfg(not(target_os = "linux"))]
-                let device: Box<dyn i3c::I3cDevice> = Box::new(i3c::StubI3cDevice);
+                let device: Box<dyn reader::i3c::I3cDevice> = Box::new(reader::i3c::StubI3cDevice);
 
-                let client = i3c::I3cClient::new(device, bus.clone(), address_mode);
-                let bus_lock = i3c::get_bus_lock(bus);
+                let client = reader::i3c::I3cClient::new(device, bus.clone(), address_mode);
+                let bus_lock = reader::i3c::get_bus_lock(bus);
                 Ok(BusClient::I3c {
                     client: std::sync::Arc::new(tokio::sync::Mutex::new(client)),
                     bus_lock,
