@@ -109,7 +109,7 @@ fn test_collector_config(name: &str) -> Collector {
         protocol: Protocol::ModbusTcp {
             endpoint: "127.0.0.1:502".to_string(),
         },
-        slave_id: 1,
+        slave_id: Some(1),
         polling_interval: Duration::from_millis(100),
         labels: HashMap::new(),
         metrics_files: None,
@@ -117,7 +117,7 @@ fn test_collector_config(name: &str) -> Collector {
             name: "temperature".to_string(),
             description: "Temperature sensor".to_string(),
             metric_type: ConfigMetricType::Gauge,
-            register_type: RegisterType::Holding,
+            register_type: Some(RegisterType::Holding),
             address: 100,
             data_type: DataType::U16,
             byte_order: ByteOrder::BigEndian,
@@ -132,13 +132,14 @@ struct MockFactory {
     clients: Mutex<Vec<Box<dyn ModbusClient>>>,
 }
 
-impl ModbusClientFactory for MockFactory {
-    fn create(&self, _collector: &Collector) -> Box<dyn ModbusClient> {
-        self.clients
+impl BusClientFactory for MockFactory {
+    fn create(&self, _collector: &Collector) -> BusClient {
+        let client = self.clients
             .lock()
             .unwrap()
             .pop()
-            .expect("no mock clients left")
+            .expect("no mock clients left");
+        BusClient::Modbus(client)
     }
 }
 

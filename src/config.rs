@@ -236,7 +236,8 @@ fn default_mqtt_timeout() -> Duration {
 pub struct Collector {
     pub name: String,
     pub protocol: Protocol,
-    pub slave_id: u8,
+    #[serde(default)]
+    pub slave_id: Option<u8>,
     #[serde(default = "default_polling_interval", with = "humantime_serde")]
     pub polling_interval: Duration,
     #[serde(default)]
@@ -268,6 +269,11 @@ pub enum Protocol {
         #[serde(default)]
         parity: Parity,
     },
+    #[serde(rename = "i2c")]
+    I2c {
+        bus: String,
+        address: u8,
+    },
 }
 
 fn default_bps() -> u32 {
@@ -297,7 +303,7 @@ pub struct Metric {
     pub description: String,
     #[serde(rename = "type")]
     pub metric_type: MetricType,
-    pub register_type: RegisterType,
+    pub register_type: Option<RegisterType>,
     pub address: u16,
     pub data_type: DataType,
     #[serde(default = "default_byte_order")]
@@ -336,6 +342,7 @@ pub enum RegisterType {
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum DataType {
+    U8,
     U16,
     I16,
     U32,
@@ -351,7 +358,7 @@ impl DataType {
     /// Returns the number of 16-bit Modbus registers this data type occupies.
     pub fn register_count(self) -> u16 {
         match self {
-            DataType::U16 | DataType::I16 | DataType::Bool => 1,
+            DataType::U8 | DataType::U16 | DataType::I16 | DataType::Bool => 1,
             DataType::U32 | DataType::I32 | DataType::F32 => 2,
             DataType::U64 | DataType::I64 | DataType::F64 => 4,
         }
@@ -433,13 +440,7 @@ impl RawMetric {
 
         let register_type = self
             .register_type
-            .or_else(|| d.and_then(|d| d.register_type))
-            .with_context(|| {
-                format!(
-                    "collector '{}': metric '{}' in '{}': missing required field 'register_type'",
-                    collector_name, self.name, file_path
-                )
-            })?;
+            .or_else(|| d.and_then(|d| d.register_type));
 
         let address = self.address.with_context(|| {
             format!(
@@ -623,12 +624,89 @@ impl Config {
             if !cnames.insert(&c.name) {
                 bail!("duplicate collector name: {}", c.name);
             }
-            if c.slave_id == 0 || c.slave_id > 247 {
-                bail!(
-                    "collector '{}': slave_id must be 1-247, got {}",
-                    c.name,
-                    c.slave_id
-                );
+            // Protocol-specific validation
+            match &c.protocol {
+                Protocol::ModbusTcp { endpoint } => {
+                    // slave_id required for Modbus
+                    match c.slave_id {
+                        Some(id) if id == 0 || id > 247 => {
+                            bail!(
+                                "collector '{}': slave_id must be 1-247, got {}",
+                                c.name,
+                                id
+                            );
+                        }
+                        None => {
+                            bail!(
+                                "collector '{}': slave_id is required for Modbus protocols",
+                                c.name
+                            );
+                        }
+                        _ => {}
+                    }
+                    let valid = endpoint
+                        .rsplit_once(':')
+                        .is_some_and(|(_, port)| port.parse::<u16>().is_ok());
+                    if !valid {
+                        bail!(
+                            "collector '{}': invalid TCP endpoint '{}' (expected host:port, e.g. 127.0.0.1:502)",
+                            c.name,
+                            endpoint
+                        );
+                    }
+                }
+                Protocol::ModbusRtu {
+                    data_bits,
+                    stop_bits,
+                    ..
+                } => {
+                    // slave_id required for Modbus
+                    match c.slave_id {
+                        Some(id) if id == 0 || id > 247 => {
+                            bail!(
+                                "collector '{}': slave_id must be 1-247, got {}",
+                                c.name,
+                                id
+                            );
+                        }
+                        None => {
+                            bail!(
+                                "collector '{}': slave_id is required for Modbus protocols",
+                                c.name
+                            );
+                        }
+                        _ => {}
+                    }
+                    if !(5..=8).contains(data_bits) {
+                        bail!(
+                            "collector '{}': data_bits must be 5-8, got {}",
+                            c.name,
+                            data_bits
+                        );
+                    }
+                    if !(1..=2).contains(stop_bits) {
+                        bail!(
+                            "collector '{}': stop_bits must be 1-2, got {}",
+                            c.name,
+                            stop_bits
+                        );
+                    }
+                }
+                Protocol::I2c { bus, address } => {
+                    if bus.is_empty() {
+                        bail!(
+                            "collector '{}': I2C bus path must not be empty",
+                            c.name
+                        );
+                    }
+                    if *address < 0x03 || *address > 0x77 {
+                        bail!(
+                            "collector '{}': I2C address must be 0x03-0x77, got {:#04x}",
+                            c.name,
+                            address
+                        );
+                    }
+                }
             }
             // Validate polling_interval minimum (100ms)
             if c.polling_interval.as_millis() < 100 {
@@ -638,63 +716,55 @@ impl Config {
                     c.polling_interval
                 );
             }
-            // Validate TCP endpoint format (must be parseable as host:port)
-            if let Protocol::ModbusTcp { endpoint } = &c.protocol {
-                // Must contain at least one colon separating host from port,
-                // and the port part must be a valid u16.
-                let valid = endpoint
-                    .rsplit_once(':')
-                    .is_some_and(|(_, port)| port.parse::<u16>().is_ok());
-                if !valid {
-                    bail!(
-                        "collector '{}': invalid TCP endpoint '{}' (expected host:port, e.g. 127.0.0.1:502)",
-                        c.name,
-                        endpoint
-                    );
-                }
-            }
-            // Validate RTU data_bits and stop_bits ranges
-            if let Protocol::ModbusRtu {
-                data_bits,
-                stop_bits,
-                ..
-            } = &c.protocol
-            {
-                if !(5..=8).contains(data_bits) {
-                    bail!(
-                        "collector '{}': data_bits must be 5-8, got {}",
-                        c.name,
-                        data_bits
-                    );
-                }
-                if !(1..=2).contains(stop_bits) {
-                    bail!(
-                        "collector '{}': stop_bits must be 1-2, got {}",
-                        c.name,
-                        stop_bits
-                    );
-                }
-            }
             if c.metrics.is_empty() {
                 bail!("collector '{}': at least one metric required", c.name);
             }
+            let is_i2c = matches!(c.protocol, Protocol::I2c { .. });
             for m in &c.metrics {
-                if (m.register_type == RegisterType::Coil
-                    || m.register_type == RegisterType::Discrete)
-                    && m.data_type != DataType::Bool
-                {
-                    bail!(
-                        "collector '{}', metric '{}': coil/discrete register must use data_type bool",
-                        c.name,
-                        m.name
-                    );
+                // Modbus-specific validations
+                if !is_i2c {
+                    let register_type = m.register_type.unwrap_or(RegisterType::Holding);
+                    if (register_type == RegisterType::Coil
+                        || register_type == RegisterType::Discrete)
+                        && m.data_type != DataType::Bool
+                    {
+                        bail!(
+                            "collector '{}', metric '{}': coil/discrete register must use data_type bool",
+                            c.name,
+                            m.name
+                        );
+                    }
+                    if m.data_type == DataType::Bool
+                        && register_type != RegisterType::Coil
+                        && register_type != RegisterType::Discrete
+                    {
+                        bail!(
+                            "collector '{}', metric '{}': bool data_type must use coil or discrete register",
+                            c.name,
+                            m.name
+                        );
+                    }
+                    if m.metric_type == MetricType::Counter
+                        && (register_type == RegisterType::Coil
+                            || register_type == RegisterType::Discrete)
+                    {
+                        bail!(
+                            "collector '{}', metric '{}': coil/discrete registers only support gauge metric type",
+                            c.name,
+                            m.name
+                        );
+                    }
+                    if m.register_type.is_none() {
+                        bail!(
+                            "collector '{}', metric '{}': register_type is required for Modbus protocols",
+                            c.name,
+                            m.name
+                        );
+                    }
                 }
-                if m.data_type == DataType::Bool
-                    && m.register_type != RegisterType::Coil
-                    && m.register_type != RegisterType::Discrete
-                {
+                if m.metric_type == MetricType::Counter && m.data_type == DataType::Bool {
                     bail!(
-                        "collector '{}', metric '{}': bool data_type must use coil or discrete register",
+                        "collector '{}', metric '{}': counter metric type cannot be used with bool data_type",
                         c.name,
                         m.name
                     );
@@ -707,39 +777,22 @@ impl Config {
                         m.name
                     );
                 }
-                // Validate counter not used on coil/discrete (must be gauge only)
-                if m.metric_type == MetricType::Counter
-                    && (m.register_type == RegisterType::Coil
-                        || m.register_type == RegisterType::Discrete)
-                {
-                    bail!(
-                        "collector '{}', metric '{}': coil/discrete registers only support gauge metric type",
-                        c.name,
-                        m.name
-                    );
-                }
-                // Validate counter + bool is nonsensical
-                if m.metric_type == MetricType::Counter && m.data_type == DataType::Bool {
-                    bail!(
-                        "collector '{}', metric '{}': counter metric type cannot be used with bool data_type",
-                        c.name,
-                        m.name
-                    );
-                }
-                // Validate multi-register address overflow
-                let reg_count = m.data_type.register_count();
-                if m.address as u32 + reg_count as u32 > 65536 {
-                    bail!(
-                        "collector '{}', metric '{}': address {} + {} registers exceeds 65535",
-                        c.name,
-                        m.name,
-                        m.address,
-                        reg_count
-                    );
+                // Validate multi-register address overflow (Modbus only)
+                if !is_i2c {
+                    let reg_count = m.data_type.register_count();
+                    if m.address as u32 + reg_count as u32 > 65536 {
+                        bail!(
+                            "collector '{}', metric '{}': address {} + {} registers exceeds 65535",
+                            c.name,
+                            m.name,
+                            m.address,
+                            reg_count
+                        );
+                    }
                 }
                 // Warn if byte_order is set to non-default for single-register types
                 // (byte_order is meaningless for u16/i16/bool which occupy only 1 register)
-                if m.data_type.register_count() == 1 && m.byte_order != ByteOrder::BigEndian {
+                if !is_i2c && m.data_type.register_count() == 1 && m.byte_order != ByteOrder::BigEndian {
                     eprintln!(
                         "warning: collector '{}', metric '{}': byte_order has no effect for single-register type {:?}",
                         c.name, m.name, m.data_type

@@ -9,6 +9,7 @@ use tracing::{error, info, instrument, warn};
 
 use crate::config::{self, RegisterType};
 use crate::decoder;
+use crate::i2c::{self, I2cClient};
 use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 use crate::modbus::ModbusClient;
@@ -32,6 +33,7 @@ fn map_byte_order(bo: config::ByteOrder) -> decoder::ByteOrder {
 
 fn map_data_type(dt: config::DataType) -> decoder::DataType {
     match dt {
+        config::DataType::U8 => decoder::DataType::U8,
         config::DataType::U16 => decoder::DataType::U16,
         config::DataType::I16 => decoder::DataType::I16,
         config::DataType::U32 => decoder::DataType::U32,
@@ -51,14 +53,56 @@ fn map_metric_type(mt: config::MetricType) -> MetricType {
     }
 }
 
+/// Abstraction over Modbus and I2C clients.
+pub enum BusClient {
+    Modbus(Box<dyn ModbusClient>),
+    I2c {
+        client: I2cClient,
+        bus_lock: Arc<tokio::sync::Mutex<()>>,
+    },
+}
+
+impl BusClient {
+    async fn connect(&mut self) -> Result<()> {
+        match self {
+            BusClient::Modbus(c) => c.connect().await,
+            BusClient::I2c { client, .. } => {
+                use crate::modbus::ModbusConnection;
+                client.connect().await
+            }
+        }
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        match self {
+            BusClient::Modbus(c) => c.disconnect().await,
+            BusClient::I2c { client, .. } => {
+                use crate::modbus::ModbusConnection;
+                client.disconnect().await
+            }
+        }
+    }
+
+    fn is_connected(&self) -> bool {
+        match self {
+            BusClient::Modbus(c) => c.is_connected(),
+            BusClient::I2c { client, .. } => {
+                use crate::modbus::ModbusConnection;
+                client.is_connected()
+            }
+        }
+    }
+}
+
 /// Read a single metric from the Modbus client.
 #[instrument(skip(client), fields(metric = %metric.name))]
 async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> Result<f64> {
     let count = metric.data_type.register_count();
     let data_type = map_data_type(metric.data_type);
     let byte_order = map_byte_order(metric.byte_order);
+    let register_type = metric.register_type.unwrap_or(RegisterType::Holding);
 
-    match metric.register_type {
+    match register_type {
         RegisterType::Holding => {
             let regs = client
                 .read_holding_registers(metric.address, count)
@@ -100,10 +144,20 @@ async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> 
     }
 }
 
+/// Read a single metric from any bus client.
+async fn read_bus_metric(client: &mut BusClient, metric: &config::Metric) -> Result<f64> {
+    match client {
+        BusClient::Modbus(c) => read_metric(c.as_mut(), metric).await,
+        BusClient::I2c { client, bus_lock } => {
+            i2c::read_i2c_metric(client, metric, bus_lock).await
+        }
+    }
+}
+
 /// Run a single collector loop. This is the core of each collector task.
 #[instrument(skip_all, fields(collector = %collector.name))]
 async fn run_collector(
-    mut client: Box<dyn ModbusClient>,
+    mut client: BusClient,
     collector: config::Collector,
     store: MetricStore,
     global_labels: BTreeMap<String, String>,
@@ -169,7 +223,7 @@ async fn run_collector(
                 stats.modbus_requests.fetch_add(1, Relaxed);
             }
 
-            match read_metric(client.as_mut(), metric_cfg).await {
+            match read_bus_metric(&mut client, metric_cfg).await {
                 Ok(value) => {
                     local_cache.insert(
                         metric_cfg.name.clone(),
@@ -325,10 +379,10 @@ async fn run_collector(
     }
 }
 
-/// Factory trait for creating Modbus clients from config.
+/// Factory trait for creating bus clients from config.
 /// This allows tests to inject mock clients.
-pub trait ModbusClientFactory: Send + Sync {
-    fn create(&self, collector: &config::Collector) -> Box<dyn ModbusClient>;
+pub trait BusClientFactory: Send + Sync {
+    fn create(&self, collector: &config::Collector) -> BusClient;
 }
 
 /// Handle for managing all collector tasks.
@@ -343,7 +397,7 @@ impl CollectorEngine {
         collectors: Vec<config::Collector>,
         store: MetricStore,
         global_labels: BTreeMap<String, String>,
-        factory: &dyn ModbusClientFactory,
+        factory: &dyn BusClientFactory,
         internal_metrics: Option<Arc<InternalMetrics>>,
     ) -> Self {
         let (shutdown_tx, _) = watch::channel(false);

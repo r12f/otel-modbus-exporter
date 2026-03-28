@@ -36,7 +36,7 @@ fn parse(yaml: &str) -> Result<Config> {
 fn test_parse_minimal() {
     let c = parse(&minimal_yaml()).unwrap();
     assert_eq!(c.collectors.len(), 1);
-    assert_eq!(c.collectors[0].slave_id, 1);
+    assert_eq!(c.collectors[0].slave_id, Some(1));
     assert_eq!(c.collectors[0].polling_interval.as_secs(), 10);
     assert_eq!(c.collectors[0].metrics[0].scale, 1.0);
     assert_eq!(c.collectors[0].metrics[0].byte_order, ByteOrder::BigEndian);
@@ -703,7 +703,7 @@ collectors:
     assert_eq!(config.collectors[0].metrics.len(), 2);
     let v = &config.collectors[0].metrics[0];
     assert_eq!(v.name, "voltage");
-    assert_eq!(v.register_type, RegisterType::Holding);
+    assert_eq!(v.register_type, Some(RegisterType::Holding));
     assert_eq!(v.data_type, DataType::F32);
     assert_eq!(v.metric_type, MetricType::Gauge);
     assert_eq!(v.unit, "V");
@@ -765,7 +765,7 @@ collectors:
         .iter()
         .find(|m| m.name == "voltage")
         .unwrap();
-    assert_eq!(v.register_type, RegisterType::Input);
+    assert_eq!(v.register_type, Some(RegisterType::Input));
     assert_eq!(v.address, 100);
     // description should be empty (full replacement, not inherited)
     assert_eq!(v.description, "");
@@ -814,7 +814,7 @@ collectors:
     let config = Config::load(&config_path).unwrap();
     assert_eq!(config.collectors[0].metrics.len(), 1);
     let v = &config.collectors[0].metrics[0];
-    assert_eq!(v.register_type, RegisterType::Input);
+    assert_eq!(v.register_type, Some(RegisterType::Input));
     assert_eq!(v.data_type, DataType::U16);
     assert_eq!(v.address, 200);
 }

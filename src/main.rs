@@ -3,6 +3,7 @@ mod collector;
 mod config;
 mod decoder;
 mod export;
+mod i2c;
 mod internal_metrics;
 mod logging;
 mod metrics;
@@ -16,7 +17,7 @@ use clap::Parser;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use collector::{CollectorEngine, ModbusClientFactory, DEFAULT_SHUTDOWN_TIMEOUT};
+use collector::{BusClient, BusClientFactory, CollectorEngine, DEFAULT_SHUTDOWN_TIMEOUT};
 use config::{find_config_file, Cli, Config, Protocol};
 use internal_metrics::InternalMetrics;
 use logging::{init_logging, LogOutput, LoggingConfig};
@@ -25,13 +26,14 @@ use modbus::{rtu::RtuClient, tcp::TcpClient};
 
 // ── Real Modbus client factory ────────────────────────────────────────
 
-struct RealModbusClientFactory;
+struct RealBusClientFactory;
 
-impl ModbusClientFactory for RealModbusClientFactory {
-    fn create(&self, collector: &config::Collector) -> Box<dyn modbus::ModbusClient> {
+impl BusClientFactory for RealBusClientFactory {
+    fn create(&self, collector: &config::Collector) -> BusClient {
         match &collector.protocol {
             Protocol::ModbusTcp { endpoint } => {
-                Box::new(TcpClient::new(endpoint.clone(), collector.slave_id))
+                let slave_id = collector.slave_id.unwrap_or(1);
+                BusClient::Modbus(Box::new(TcpClient::new(endpoint.clone(), slave_id)))
             }
             Protocol::ModbusRtu {
                 device,
@@ -40,6 +42,7 @@ impl ModbusClientFactory for RealModbusClientFactory {
                 stop_bits,
                 parity,
             } => {
+                let slave_id = collector.slave_id.unwrap_or(1);
                 let builder = tokio_serial::new(device, *bps)
                     .data_bits(match data_bits {
                         5 => tokio_serial::DataBits::Five,
@@ -56,7 +59,15 @@ impl ModbusClientFactory for RealModbusClientFactory {
                         config::Parity::Even => tokio_serial::Parity::Even,
                         config::Parity::Odd => tokio_serial::Parity::Odd,
                     });
-                Box::new(RtuClient::new(builder, collector.slave_id))
+                BusClient::Modbus(Box::new(RtuClient::new(builder, slave_id)))
+            }
+            Protocol::I2c { bus, address } => {
+                // Use a stub device — real Linux I2C device is created at connect time
+                let device = i2c::StubI2cDevice;
+                let client = i2c::I2cClient::new(Box::new(device), bus.clone(), *address);
+                // Bus lock is created lazily via get_bus_lock
+                let bus_lock = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+                BusClient::I2c { client, bus_lock }
             }
         }
     }
@@ -140,7 +151,7 @@ async fn main() -> Result<()> {
     // 5. Spawn collector tasks
     let global_labels: BTreeMap<String, String> =
         config.global_labels.clone().into_iter().collect();
-    let factory = RealModbusClientFactory;
+    let factory = RealBusClientFactory;
     let engine = CollectorEngine::spawn(
         config.collectors.clone(),
         store.clone(),
