@@ -60,7 +60,7 @@ read is a **command → response** transfer. SPI metrics use different addressin
 | `name` | `string` | Yes | — | Metric name |
 | `type` | `string` | Yes | — | `"counter"` or `"gauge"` |
 | `command` | `list<u8>` | Yes | — | Bytes to transmit (TX buffer) |
-| `response_length` | `u16` | No | auto | Total response bytes (defaults to `command` length for full-duplex) |
+| `response_length` | `u16` | No | auto | Total response bytes. Defaults to `command` length since SPI is full-duplex (TX and RX are the same length). Set explicitly if response is longer than command. |
 | `response_offset` | `u16` | No | `0` | Skip first N bytes of response before decoding |
 | `data_type` | `string` | Yes | — | `u8`, `u16`, `i16`, `u32`, `i32`, `f32`, `u64`, `i64`, `f64`, `bool` |
 | `byte_order` | `string` | No | `"big_endian"` | Byte order for multi-byte values |

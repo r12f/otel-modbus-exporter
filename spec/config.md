@@ -147,8 +147,8 @@ See [spi.md](spi.md) for full SPI specification.
 
 ### Metric
 
-The metric schema varies slightly by protocol. Modbus and I2C use `address` + `register_type`.
-SPI uses `command` + `response_length` + `response_offset`. Common fields apply to all.
+The metric schema varies slightly by protocol. Modbus uses `address` + `register_type`.
+I2C uses `address` only (no register types). SPI uses `command` + `response_length` + `response_offset`. Common fields apply to all.
 
 #### Common Fields
 
@@ -185,7 +185,7 @@ Note: `register_type` is not used for I2C. `u8` data type is available.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `command` | `list<u8>` | Yes | — | Bytes to transmit (TX buffer) |
-| `response_length` | `u16` | No | auto | Total response bytes (defaults to `command` length) |
+| `response_length` | `u16` | No | auto | Total response bytes (defaults to `command` length — SPI is full-duplex) |
 | `response_offset` | `u16` | No | `0` | Skip first N bytes of response before decoding |
 
 Note: `register_type` and `address` are not used for SPI. `u8` data type is available.
@@ -316,6 +316,7 @@ logging:
 14. `polling_interval` must be ≥ 100ms.
 15. `scale` must not be zero.
 16. `counter` metric type is not compatible with `coil`/`discrete` register types or `bool` data type (counters must be numeric).
+17. `data_type: u8` is only valid for I2C and SPI collectors (Modbus registers are 16-bit minimum).
 
 ## Scale Formula
 

@@ -30,7 +30,7 @@ collectors:
     metrics:
       - name: temperature
         type: gauge
-        register: 0xFA       # register address to read
+        address: 0xFA        # I2C register address to read
         data_type: u16
         byte_order: big_endian
         scale: 0.01
