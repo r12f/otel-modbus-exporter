@@ -14,9 +14,10 @@ RUN cargo build --release
 
 ### Runtime Stage
 
+Uses [Google's distroless](https://github.com/GoogleContainerTools/distroless) base image for a minimal, secure runtime with no shell or package manager. The `nonroot` tag runs as a non-root user by default. Since the binary is statically linked (musl), no additional system libraries are needed.
+
 ```dockerfile
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /src/target/release/bus-exporter /usr/local/bin/
 ENTRYPOINT ["bus-exporter"]
 CMD ["--config", "/etc/bus-exporter/config.yaml"]
