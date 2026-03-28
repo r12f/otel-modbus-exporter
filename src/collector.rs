@@ -102,10 +102,10 @@ async fn run_collector(
             io_count,
         } = client.read(&cancel).await;
 
-        // Increment modbus_requests by actual I/O count
+        // Increment read_requests by actual I/O count
         if let Some(ref im) = internal_metrics {
             let stats = im.get_or_create_collector(&collector.name);
-            stats.modbus_requests.fetch_add(io_count as u64, Relaxed);
+            stats.read_requests.fetch_add(io_count as u64, Relaxed);
         }
 
         for (metric_name, result) in read_results {
@@ -133,7 +133,7 @@ async fn run_collector(
                 Err(e) => {
                     if let Some(ref im) = internal_metrics {
                         let stats = im.get_or_create_collector(&collector.name);
-                        stats.modbus_errors.fetch_add(1, Relaxed);
+                        stats.read_errors.fetch_add(1, Relaxed);
                     }
 
                     if !client.is_connected() {
