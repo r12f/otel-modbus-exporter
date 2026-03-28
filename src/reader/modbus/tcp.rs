@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tokio_modbus::client::{tcp, Context as ModbusContext, Reader};
@@ -138,6 +136,7 @@ impl ModbusReader for ModbusTcpMetricReader {
 #[async_trait]
 impl crate::reader::MetricReader for ModbusTcpMetricReader {
     fn set_metrics(&mut self, metrics: Vec<MetricConfig>) {
+        crate::reader::warn_duplicate_metric_names(&metrics);
         self.metrics = metrics;
     }
 
@@ -153,16 +152,24 @@ impl crate::reader::MetricReader for ModbusTcpMetricReader {
         BusConnection::is_connected(self)
     }
 
-    async fn read(&mut self) -> HashMap<String, Result<f64>> {
-        let metrics = self.metrics.clone();
-        let super::batch::BatchReadResult {
-            results,
-            read_count: _,
-        } = super::batch::batch_read_coalesced(self, &metrics).await;
-        results
+    async fn read(
+        &mut self,
+        _cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::reader::ReadResults {
+        // Temporarily take metrics to avoid cloning; restore after read.
+        let metrics = std::mem::take(&mut self.metrics);
+        let batch = super::batch::batch_read_coalesced(self, &metrics).await;
+        let io_count = batch.read_count;
+        let map = batch
+            .results
             .into_iter()
             .map(|(m, r)| (m.name.clone(), r))
-            .collect()
+            .collect();
+        self.metrics = metrics;
+        crate::reader::ReadResults {
+            metrics: map,
+            io_count,
+        }
     }
 }
 

@@ -192,6 +192,7 @@ pub async fn read_i2c_metric(
 #[async_trait]
 impl crate::reader::MetricReader for I2cMetricReader {
     fn set_metrics(&mut self, metrics: Vec<config::MetricConfig>) {
+        crate::reader::warn_duplicate_metric_names(&metrics);
         self.metrics = metrics;
     }
 
@@ -209,14 +210,25 @@ impl crate::reader::MetricReader for I2cMetricReader {
         self.connected
     }
 
-    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+    async fn read(
+        &mut self,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::reader::ReadResults {
         let mut results = HashMap::new();
-        let metrics = self.metrics.clone();
-        for metric in &metrics {
-            let result = read_i2c_metric(self, metric, &Arc::clone(&self.bus_lock)).await;
+        let bus_lock = Arc::clone(&self.bus_lock);
+        for i in 0..self.metrics.len() {
+            if cancel.is_cancelled() {
+                break;
+            }
+            let metric = &self.metrics[i];
+            let result = read_i2c_metric(self, metric, &bus_lock).await;
             results.insert(metric.name.clone(), result);
         }
-        results
+        let io_count = results.len();
+        crate::reader::ReadResults {
+            metrics: results,
+            io_count,
+        }
     }
 }
 

@@ -5,12 +5,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
 
 use crate::config;
 use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
-use crate::reader::MetricReader;
+use crate::reader::{MetricReader, ReadResults};
 
 /// Maximum backoff duration for reconnection attempts.
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -54,6 +55,9 @@ async fn run_collector(
     let poll_interval = collector.polling_interval;
     let warn_threshold = poll_interval.mul_f64(0.8);
 
+    // CancellationToken for cooperative shutdown inside read()
+    let cancel = CancellationToken::new();
+
     // Configure which metrics to read
     client.set_metrics(collector.metrics.clone());
 
@@ -70,6 +74,7 @@ async fn run_collector(
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
                     _ = shutdown_rx.changed() => {
+                        cancel.cancel();
                         let _ = client.disconnect().await;
                         return;
                     }
@@ -94,16 +99,20 @@ async fn run_collector(
         // Check shutdown before read
         if *shutdown_rx.borrow() {
             info!("shutdown requested, exiting");
+            cancel.cancel();
             let _ = client.disconnect().await;
             return;
         }
 
-        let read_results = client.read().await;
+        let ReadResults {
+            metrics: read_results,
+            io_count,
+        } = client.read(&cancel).await;
 
-        // Increment modbus_requests (we count as 1 bulk read call)
+        // Increment modbus_requests by actual I/O count
         if let Some(ref im) = internal_metrics {
             let stats = im.get_or_create_collector(&collector.name);
-            stats.modbus_requests.fetch_add(1, Relaxed);
+            stats.modbus_requests.fetch_add(io_count as u64, Relaxed);
         }
 
         for (metric_name, result) in read_results {
@@ -163,6 +172,7 @@ async fn run_collector(
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
                     _ = shutdown_rx.changed() => {
+                        cancel.cancel();
                         let _ = client.disconnect().await;
                         return;
                     }
@@ -252,6 +262,7 @@ async fn run_collector(
                 _ = tokio::time::sleep(remaining) => {}
                 _ = shutdown_rx.changed() => {
                     info!("shutdown requested");
+                    cancel.cancel();
                     let _ = client.disconnect().await;
                     return;
                 }
@@ -260,6 +271,7 @@ async fn run_collector(
             // Check shutdown even if no sleep
             if *shutdown_rx.borrow() {
                 info!("shutdown requested");
+                cancel.cancel();
                 let _ = client.disconnect().await;
                 return;
             }

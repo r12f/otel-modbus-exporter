@@ -464,6 +464,7 @@ impl I3cMetricReaderHandle {
 #[async_trait]
 impl crate::reader::MetricReader for I3cMetricReaderHandle {
     fn set_metrics(&mut self, metrics: Vec<config::MetricConfig>) {
+        crate::reader::warn_duplicate_metric_names(&metrics);
         self.metrics = metrics;
     }
 
@@ -484,13 +485,24 @@ impl crate::reader::MetricReader for I3cMetricReaderHandle {
             .unwrap_or(false)
     }
 
-    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+    async fn read(
+        &mut self,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::reader::ReadResults {
         let mut results = HashMap::new();
-        for metric in &self.metrics.clone() {
+        for i in 0..self.metrics.len() {
+            if cancel.is_cancelled() {
+                break;
+            }
+            let metric = &self.metrics[i];
             let result = read_i3c_metric(&self.client, metric, &self.bus_lock).await;
             results.insert(metric.name.clone(), result);
         }
-        results
+        let io_count = results.len();
+        crate::reader::ReadResults {
+            metrics: results,
+            io_count,
+        }
     }
 }
 

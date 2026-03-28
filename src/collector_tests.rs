@@ -125,13 +125,25 @@ impl MetricReaderTrait for MockModbusClient {
         BusConnection::is_connected(self)
     }
 
-    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+    async fn read(
+        &mut self,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::reader::ReadResults {
         let mut results = HashMap::new();
-        for metric in self.metrics.clone() {
-            let result = crate::reader::modbus::read_modbus_metric(self, &metric).await;
+        let metrics = std::mem::take(&mut self.metrics);
+        for metric in &metrics {
+            if cancel.is_cancelled() {
+                break;
+            }
+            let result = crate::reader::modbus::read_modbus_metric(self, metric).await;
             results.insert(metric.name.clone(), result);
         }
-        results
+        let io_count = results.len();
+        self.metrics = metrics;
+        crate::reader::ReadResults {
+            metrics: results,
+            io_count,
+        }
     }
 }
 
@@ -145,7 +157,6 @@ fn test_collector_config(name: &str) -> CollectorConfig {
         polling_interval: Duration::from_millis(100),
         labels: HashMap::new(),
         metrics_files: None,
-        batch_read: false,
         metrics: vec![MetricConfig {
             name: "temperature".to_string(),
             description: "Temperature sensor".to_string(),
