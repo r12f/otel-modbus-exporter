@@ -1,6 +1,6 @@
 # bus-exporter
 
-A hardware bus metrics exporter that polls Modbus RTU/TCP, I2C, and SPI devices and exports metrics via OTLP (protobuf/HTTP), Prometheus scrape endpoint, and MQTT.
+A hardware bus metrics exporter that polls Modbus RTU/TCP, I2C, SPI, and I3C devices and exports metrics via OTLP (protobuf/HTTP), Prometheus scrape endpoint, and MQTT.
 
 ## Installation
 
@@ -29,6 +29,7 @@ Multi-arch images available: `linux/amd64` and `linux/arm64`. See the [Docker sp
 - **[Modbus RTU & TCP](spec/modbus.md)** — poll devices over serial (RS-485/RS-232) or Ethernet
 - **[I2C](spec/i2c.md)** — read sensors and peripherals on I2C buses (Linux)
 - **[SPI](spec/spi.md)** — read ADCs and peripherals via SPI (Linux)
+- **[I3C](spec/i3c.md)** *(planned)* — read sensors on I3C buses with dynamic addressing (Linux)
 - **[Flexible decoding](spec/decoder.md)** — u16, i16, u32, i32, f32, u64, i64, f64, bool with configurable byte order and scale/offset transform
 - **[OTLP export](spec/export-otlp.md)** — push metrics to any OpenTelemetry Collector via protobuf/HTTP
 - **[Prometheus export](spec/export-prometheus.md)** — built-in `/metrics` HTTP endpoint for pull-based scraping

@@ -95,7 +95,7 @@ See [export-mqtt.md](export-mqtt.md) for full MQTT export specification.
 |-------|------|----------|---------|-------------|
 | `name` | `string` | Yes | — | Unique collector name (used as label) |
 | `protocol` | `Protocol` | Yes | — | Connection protocol |
-| `slave_id` | `u8` | Modbus only | — | Modbus slave/unit ID (1-247). Not used for I2C/SPI. |
+| `slave_id` | `u8` | Modbus only | — | Modbus slave/unit ID (1-247). Not used for I2C/SPI/I3C. |
 | `polling_interval` | `string` | No | `"10s"` | Poll interval (duration string) |
 | `labels` | `map<string, string>` | No | `{}` | Labels for all metrics in this collector |
 | `metrics_files` | `list<string>` | No | `[]` | Paths to metrics definition files (see [Metrics Files](#metrics-files)) |
@@ -145,6 +145,24 @@ See [i2c.md](i2c.md) for full I2C specification.
 
 See [spi.md](spi.md) for full SPI specification.
 
+#### I3C
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `type` | `string` | Yes | — | Must be `"i3c"` |
+| `bus` | `string` | Yes | — | I3C bus device path (e.g., `/dev/i3c-0`) |
+| `pid` | `string` | Mode 1 | — | 48-bit Provisioned ID as hex string (e.g., `"0x0123456789AB"`) |
+| `address` | `u8` | Mode 2 | — | Static I3C device address (`0x08`–`0x3D`) |
+| `device_class` | `string` | Mode 3 | — | Device class name for discovery |
+| `instance` | `u8` | Mode 3 | — | Instance index when using `device_class` |
+
+Exactly one address mode must be set: `pid`, `address`, or `device_class` + `instance`.
+Setting zero or multiple modes is a validation error. `pid` must be a valid 48-bit hex
+string. `address` must be in range `0x08`–`0x3D`. `device_class` requires `instance`
+(and vice versa).
+
+See [i3c.md](i3c.md) for full I3C specification.
+
 ### Metric
 
 The metric schema varies slightly by protocol. Modbus uses `address` + `register_type`.
@@ -189,6 +207,14 @@ Note: `register_type` is not used for I2C. `u8` data type is available.
 | `response_offset` | `u16` | No | `0` | Skip first N bytes of response before decoding |
 
 Note: `register_type` and `address` are not used for SPI. `u8` data type is available.
+
+#### I3C-specific Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `address` | `u8` | Yes | — | I3C register address (0x00–0xFF) |
+
+Note: `register_type` is not used for I3C. `u8` data type is available. `byte_order` supports only `big_endian`/`little_endian` (`mid_*` variants are Modbus-specific).
 
 ### Metrics Files
 
@@ -316,7 +342,11 @@ logging:
 14. `polling_interval` must be ≥ 1ms.
 15. `scale` must not be zero.
 16. `counter` metric type is not compatible with `coil`/`discrete` register types or `bool` data type (counters must be numeric).
-17. `data_type: u8` is only valid for I2C and SPI collectors (Modbus registers are 16-bit minimum).
+17. `data_type: u8` is only valid for I2C, I3C, and SPI collectors (Modbus registers are 16-bit minimum).
+18. For I3C collectors, exactly one address mode must be set: `pid`, `address`, or `device_class` + `instance`. Zero or multiple is an error.
+19. I3C `pid` must be a valid 48-bit hex string (e.g., `"0x0123456789AB"`).
+20. I3C `address` must be in the dynamic address range: `0x08`–`0x3D`.
+21. I3C `device_class` requires `instance` to also be set (and vice versa).
 
 ## Scale Formula
 
