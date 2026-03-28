@@ -7,8 +7,7 @@ WORKDIR /src
 COPY . .
 RUN cargo build --release
 
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /src/target/release/bus-exporter /usr/local/bin/
 EXPOSE 9090
 HEALTHCHECK NONE
