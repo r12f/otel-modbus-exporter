@@ -1057,6 +1057,11 @@ fn find_config_fallback_cwd() {
 
 #[test]
 fn find_config_fallback_none_found() {
+    // Skip if /etc/bus-exporter/config.yaml exists (e.g., CI runner with system config)
+    if std::path::Path::new("/etc/bus-exporter/config.yaml").exists() {
+        eprintln!("skipping: /etc/bus-exporter/config.yaml exists on this system");
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let old_dir = std::env::current_dir().unwrap();
     // empty dir, no config.yaml
