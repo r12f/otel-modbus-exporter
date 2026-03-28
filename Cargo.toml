@@ -4,8 +4,8 @@ version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
 description = "A hardware bus metrics exporter (Modbus RTU/TCP, I2C, SPI) with OTLP and Prometheus export"
-repository = "https://github.com/r12f/modbus-exporter"
-homepage = "https://github.com/r12f/modbus-exporter"
+repository = "https://github.com/r12f/bus-exporter"
+homepage = "https://github.com/r12f/bus-exporter"
 keywords = ["modbus", "opentelemetry", "prometheus", "metrics", "exporter"]
 categories = ["network-programming"]
 
