@@ -28,7 +28,7 @@ impl MockI3cDevice {
 }
 
 impl I3cDevice for MockI3cDevice {
-    fn read(&mut self, _address: u8, _command: &[u8], _response_length: usize) -> Result<Vec<u8>> {
+    fn write_read(&mut self, _address: u8, _write_buf: &[u8], _read_len: usize) -> Result<Vec<u8>> {
         let mut count = self.call_count.lock().unwrap();
         let mut responses = self.responses.lock().unwrap();
         *count += 1;

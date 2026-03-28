@@ -8,43 +8,18 @@ use crate::bus;
 use crate::config;
 use crate::decoder;
 
-/// Type alias for per-bus mutex (serializes access to a single I3C controller).
+/// Type alias for the shared bus lock (std Mutex for use in spawn_blocking).
 pub type BusLock = Arc<std::sync::Mutex<()>>;
-
-/// I3C error classification for retry logic.
-#[derive(Debug)]
-pub enum I3cErrorKind {
-    /// NACK or transfer error — re-enumeration may help.
-    TransferError,
-    /// Configuration or other non-bus error — do not re-enumerate.
-    Other,
-}
-
-/// Classify an error to decide whether re-enumeration is warranted.
-fn classify_error(err: &anyhow::Error) -> I3cErrorKind {
-    let msg = format!("{err:#}").to_lowercase();
-    if msg.contains("nack")
-        || msg.contains("transfer")
-        || msg.contains("i/o error")
-        || msg.contains("io error")
-        || msg.contains("connection reset")
-        || msg.contains("remote i/o")
-    {
-        I3cErrorKind::TransferError
-    } else {
-        I3cErrorKind::Other
-    }
-}
 
 /// Trait abstracting I3C device operations for testability.
 /// Takes `&mut self` (like I2C's `I2cDevice` trait) so no `unsafe` is needed.
 pub trait I3cDevice: Send {
-    /// Read from a device at the given dynamic address.
-    /// Sends `command` bytes (register address), then reads `response_length` bytes.
-    fn read(&mut self, address: u8, command: &[u8], response_length: usize) -> Result<Vec<u8>>;
+    /// Write command bytes (register address) to the device, then read `read_len` bytes back.
+    fn write_read(&mut self, address: u8, write_buf: &[u8], read_len: usize) -> Result<Vec<u8>>;
 }
 
 /// Real I3C device using Linux /dev/i3c-N character device with ioctl-based addressing.
+/// Only available on Linux targets.
 #[cfg(target_os = "linux")]
 pub mod linux_device {
     use super::*;
@@ -67,12 +42,12 @@ pub mod linux_device {
         _pad: [u8; 5],
     }
 
-    /// ioctl request code for I3C private transfers.
-    /// I3C_IOC_PRIV_XFER = _IOR('i', 0x30, struct i3c_ioc_priv_xfer)
-    /// We use the raw number since nix::ioctl! doesn't easily handle variable-length arrays.
-    const I3C_IOC_PRIV_XFER_BASE: u64 = 0x69; // 'i'
+    /// ioctl base type code for I3C: 'i'.
+    const I3C_IOC_PRIV_XFER_BASE: u64 = 0x69;
+    /// ioctl command number for I3C private transfer.
     const I3C_IOC_PRIV_XFER_NR: u64 = 0x30;
 
+    /// Compute the ioctl request code for `num_xfers` transfers.
     fn i3c_ioc_priv_xfer(num_xfers: usize) -> libc::c_ulong {
         // _IOC(_IOC_READ | _IOC_WRITE, 'i', 0x30, num_xfers * sizeof(I3cPrivTransfer))
         let size = (num_xfers * std::mem::size_of::<I3cPrivTransfer>()) as u64;
@@ -104,11 +79,11 @@ pub mod linux_device {
     }
 
     impl I3cDevice for LinuxI3cDevice {
-        fn read(
+        fn write_read(
             &mut self,
             _address: u8,
-            command: &[u8],
-            response_length: usize,
+            write_buf: &[u8],
+            read_len: usize,
         ) -> Result<Vec<u8>> {
             let file = self
                 .fd
@@ -117,8 +92,8 @@ pub mod linux_device {
             let raw_fd = file.as_raw_fd();
 
             // Build two transfers: write command, then read response.
-            let mut read_buf = vec![0u8; response_length];
-            let mut cmd_buf = command.to_vec();
+            let mut read_buf = vec![0u8; read_len];
+            let mut cmd_buf = write_buf.to_vec();
 
             let xfers = [
                 I3cPrivTransfer {
@@ -148,24 +123,61 @@ pub mod linux_device {
     }
 }
 
-/// Stub I3C device for tests and non-Linux platforms.
+/// Stub I3C device (placeholder — real device is platform-specific).
 pub struct StubI3cDevice;
 
 impl I3cDevice for StubI3cDevice {
-    fn read(&mut self, _address: u8, _command: &[u8], _response_length: usize) -> Result<Vec<u8>> {
+    fn write_read(&mut self, _address: u8, _write_buf: &[u8], _read_len: usize) -> Result<Vec<u8>> {
         anyhow::bail!("StubI3cDevice: no real I3C hardware available")
+    }
+}
+
+// ── I3C-specific types ──────────────────────────────────────────────
+
+/// I3C error classification for retry logic.
+#[derive(Debug)]
+pub enum I3cErrorKind {
+    /// NACK or transfer error — re-enumeration may help.
+    TransferError,
+    /// Configuration or other non-bus error — do not re-enumerate.
+    Other,
+}
+
+/// Classify an error to decide whether re-enumeration is warranted.
+fn classify_error(err: &anyhow::Error) -> I3cErrorKind {
+    let msg = format!("{err:#}").to_lowercase();
+    if msg.contains("nack")
+        || msg.contains("transfer")
+        || msg.contains("i/o error")
+        || msg.contains("io error")
+        || msg.contains("connection reset")
+        || msg.contains("remote i/o")
+    {
+        I3cErrorKind::TransferError
+    } else {
+        I3cErrorKind::Other
     }
 }
 
 /// Address mode for an I3C device, resolved from config.
 #[derive(Debug, Clone)]
 pub enum AddressMode {
+    /// Provisioned ID — resolved via sysfs enumeration.
     Pid(String),
+    /// Static/pre-assigned address.
     Static(u8),
+    /// Device class + instance index — resolved via sysfs DCR matching.
     DeviceClass { class: String, instance: u8 },
 }
 
-/// I3C client wrapping a device with address resolution and caching.
+// ── Client ──────────────────────────────────────────────────────────
+
+/// I3C client that wraps a device and provides async read operations.
+///
+/// Unlike `I2cClient`, the I3C client requires `&mut self` for reads because
+/// dynamic address resolution may need to mutate cached state (e.g. after
+/// NACK-triggered re-enumeration). The client is therefore wrapped in
+/// `Arc<tokio::sync::Mutex<..>>` at the call site.
 pub struct I3cClient {
     device: Arc<std::sync::Mutex<Box<dyn I3cDevice>>>,
     bus_path: String,
@@ -205,7 +217,6 @@ fn resolve_address_from_sysfs(address_mode: &AddressMode) -> Result<u8> {
                     if let Ok(content) = fs::read_to_string(&pid_file) {
                         let dev_pid = content.trim().to_lowercase().replace("0x", "");
                         if dev_pid == pid_normalized {
-                            // Read dynamic address from the device directory name or address file
                             let addr_file = entry.path().join("dynamic_address");
                             if let Ok(addr_str) = fs::read_to_string(&addr_file) {
                                 let addr = u8::from_str_radix(
@@ -289,6 +300,9 @@ impl I3cClient {
     }
 
     /// Read bytes from a register on the I3C device with NACK retry logic.
+    ///
+    /// Takes `&mut self` (unlike I2C's `&self`) because dynamic address
+    /// resolution and invalidation mutate the cached `resolved_address`.
     pub fn read_register_sync(&mut self, register: u8, byte_count: usize) -> Result<Vec<u8>> {
         let backoffs = [
             std::time::Duration::from_millis(100),
@@ -302,7 +316,7 @@ impl I3cClient {
             .lock()
             .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
 
-        match dev.read(address, &[register], byte_count) {
+        match dev.write_read(address, &[register], byte_count) {
             Ok(data) => Ok(data),
             Err(err) => {
                 // Only retry on transfer/NACK errors; propagate others immediately.
@@ -327,7 +341,7 @@ impl I3cClient {
                                 .device
                                 .lock()
                                 .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
-                            match dev.read(new_addr, &[register], byte_count) {
+                            match dev.write_read(new_addr, &[register], byte_count) {
                                 Ok(data) => return Ok(data),
                                 Err(e) => last_err = e,
                             }
@@ -356,11 +370,13 @@ pub async fn read_i3c_metric(
     let data_type = bus::map_data_type(metric.data_type);
     let byte_order = bus::map_byte_order(metric.byte_order);
 
+    // address validated as present and in u8 range by config
     let register = metric.address.unwrap() as u8;
     let num_bytes = decoder::byte_count(data_type);
     let scale = metric.scale;
     let offset = metric.offset;
 
+    // Clone Arcs for move into spawn_blocking
     let client = Arc::clone(client);
     let bus_lock = bus_lock.clone();
 
@@ -378,7 +394,7 @@ pub async fn read_i3c_metric(
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-/// Connection/lifecycle trait impl for I3cClient.
+/// Connection/lifecycle trait impl for I3cClient (mirrors BusConnection).
 #[async_trait]
 impl crate::modbus::BusConnection for I3cClient {
     async fn connect(&mut self) -> Result<()> {
