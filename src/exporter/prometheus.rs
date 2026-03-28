@@ -100,7 +100,7 @@ fn render_metrics(store: &MetricStore) -> String {
 }
 
 /// Handler for `/metrics` (or configured path).
-#[instrument(skip_all)]
+#[instrument(level = "debug", skip_all)]
 async fn metrics_handler(State(state): State<Arc<PrometheusState>>) -> impl IntoResponse {
     // Increment scrape counter
     if let Some(ref im) = state.internal_metrics {
@@ -126,7 +126,7 @@ async fn metrics_handler(State(state): State<Arc<PrometheusState>>) -> impl Into
 /// Start the Prometheus scrape HTTP server.
 ///
 /// This function runs until the server is shut down or the process exits.
-#[instrument(skip(store))]
+#[instrument(level = "info", skip(store))]
 pub async fn serve(
     config: &PrometheusExporterConfig,
     store: MetricStore,

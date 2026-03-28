@@ -89,7 +89,7 @@ impl BusClient {
 }
 
 /// Read a single metric from the Modbus client.
-#[instrument(skip(client), fields(metric = %metric.name))]
+#[instrument(level = "debug", skip(client), fields(metric = %metric.name))]
 async fn read_metric(client: &mut dyn ModbusClient, metric: &config::MetricConfig) -> Result<f64> {
     let count = metric.data_type.register_count();
     let data_type = bus::map_data_type(metric.data_type);
@@ -152,7 +152,7 @@ async fn read_bus_metric(client: &mut BusClient, metric: &config::MetricConfig) 
 }
 
 /// Run a single collector loop. This is the core of each collector task.
-#[instrument(skip_all, fields(collector = %collector.name))]
+#[instrument(level = "info", skip_all, fields(collector = %collector.name))]
 async fn run_collector(
     mut client: BusClient,
     collector: config::CollectorConfig,
@@ -181,7 +181,7 @@ async fn run_collector(
                 break;
             }
             Err(e) => {
-                error!(error = %e, backoff_secs = backoff.as_secs(), "connection failed, retrying");
+                warn!(error = %e, backoff_secs = backoff.as_secs(), "connection failed, retrying");
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
                     _ = shutdown_rx.changed() => {
@@ -252,7 +252,7 @@ async fn run_collector(
                             }
 
                             if !modbus_client.is_connected() {
-                                error!(error = %e, "connection lost during batch poll");
+                                warn!(error = %e, "connection lost during batch poll");
                                 connection_error = true;
                                 poll_had_error = true;
                                 break;
@@ -305,7 +305,7 @@ async fn run_collector(
 
                         // Check if this is a connection-level error
                         if !client.is_connected() {
-                            error!(error = %e, "connection lost during poll");
+                            warn!(error = %e, "connection lost during poll");
                             connection_error = true;
                             poll_had_error = true;
                             break;
@@ -346,7 +346,7 @@ async fn run_collector(
                         break;
                     }
                     Err(e) => {
-                        error!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
+                        warn!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
                     }
                 }
             }

@@ -287,7 +287,7 @@ impl Backoff {
 ///
 /// The `cancel` token makes backoff sleeps cancellation-aware so shutdown
 /// is not blocked for up to 30 s waiting on a retry delay.
-#[instrument(skip_all)]
+#[instrument(level = "debug", skip_all)]
 async fn send_with_retry(
     client: &reqwest::Client,
     url: &str,
@@ -400,7 +400,7 @@ async fn send_with_retry(
 
 /// Start the periodic OTLP push loop.  Runs until the token is cancelled.
 /// Performs one final flush on shutdown.
-#[instrument(skip_all, fields(endpoint))]
+#[instrument(level = "info", skip_all, fields(endpoint))]
 pub async fn run(
     config: OtlpExporterConfig,
     store: MetricStore,

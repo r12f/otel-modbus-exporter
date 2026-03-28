@@ -3,7 +3,7 @@ use std::time::Duration;
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS, Transport};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::config::MqttExporterConfig;
 use crate::metrics::MetricStore;
@@ -97,7 +97,7 @@ pub async fn run_mqtt_exporter(
     let endpoint = match &config.endpoint {
         Some(ep) => ep.clone(),
         None => {
-            warn!("mqtt exporter has no endpoint configured");
+            error!("mqtt exporter has no endpoint configured");
             return;
         }
     };
@@ -121,7 +121,7 @@ pub async fn run_mqtt_exporter(
                 mqttoptions.set_transport(Transport::tls_with_config(tls_config));
             }
             Err(e) => {
-                warn!(%e, "failed to build TLS config");
+                error!(%e, "failed to build TLS config");
                 return;
             }
         }
