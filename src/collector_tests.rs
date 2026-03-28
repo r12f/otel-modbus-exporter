@@ -4,6 +4,7 @@ use crate::config::{
     RegisterType,
 };
 use crate::reader::modbus::{BusConnection, ModbusReader};
+use crate::reader::{MetricReader as MetricReaderTrait, ReaderCapabilities};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -104,6 +105,29 @@ impl ModbusReader for MockModbusClient {
     }
 }
 
+#[async_trait]
+impl MetricReaderTrait for MockModbusClient {
+    async fn connect(&mut self) -> Result<()> {
+        BusConnection::connect(self).await
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        BusConnection::disconnect(self).await
+    }
+
+    fn is_connected(&self) -> bool {
+        BusConnection::is_connected(self)
+    }
+
+    fn capabilities(&self) -> ReaderCapabilities {
+        ReaderCapabilities { batch_read: false }
+    }
+
+    async fn read(&mut self, metric: &MetricConfig) -> Result<f64> {
+        crate::reader::modbus::read_modbus_metric(self, metric).await
+    }
+}
+
 fn test_collector_config(name: &str) -> CollectorConfig {
     CollectorConfig {
         name: name.to_string(),
@@ -134,18 +158,18 @@ fn test_collector_config(name: &str) -> CollectorConfig {
 }
 
 struct MockFactory {
-    clients: Mutex<Vec<Box<dyn ModbusClient>>>,
+    clients: Mutex<Vec<Box<dyn MetricReaderTrait>>>,
 }
 
-impl BusClientFactory for MockFactory {
-    fn create(&self, _collector: &CollectorConfig) -> anyhow::Result<BusClient> {
+impl MetricReaderFactory for MockFactory {
+    fn create(&self, _collector: &CollectorConfig) -> anyhow::Result<Box<dyn MetricReaderTrait>> {
         let client = self
             .clients
             .lock()
             .unwrap()
             .pop()
             .expect("no mock clients left");
-        Ok(BusClient::Modbus(client))
+        Ok(client)
     }
 }
 

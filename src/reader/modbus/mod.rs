@@ -5,7 +5,7 @@ pub mod tcp;
 #[cfg(test)]
 mod mod_tests;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use std::time::Duration;
 
@@ -89,3 +89,57 @@ pub trait ModbusReader: Send {
 /// Combined trait for convenience — a full Modbus client.
 pub trait ModbusClient: BusConnection + ModbusReader {}
 impl<T: BusConnection + ModbusReader> ModbusClient for T {}
+
+/// Read a single metric value from any Modbus client (used by MetricReader impls).
+pub(crate) async fn read_modbus_metric(
+    client: &mut dyn ModbusClient,
+    metric: &crate::config::MetricConfig,
+) -> Result<f64> {
+    use crate::config::RegisterType;
+
+    let count = metric.data_type.register_count();
+    let data_type = crate::bus::map_data_type(metric.data_type);
+    let byte_order = crate::bus::map_byte_order(metric.byte_order);
+    let register_type = metric.register_type.unwrap_or(RegisterType::Holding);
+
+    match register_type {
+        RegisterType::Holding => {
+            let regs = client
+                .read_holding_registers(metric.address.unwrap(), count)
+                .await
+                .context("reading holding registers")?;
+            crate::decoder::decode(&regs, data_type, byte_order, metric.scale, metric.offset)
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+        RegisterType::Input => {
+            let regs = client
+                .read_input_registers(metric.address.unwrap(), count)
+                .await
+                .context("reading input registers")?;
+            crate::decoder::decode(&regs, data_type, byte_order, metric.scale, metric.offset)
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+        RegisterType::Coil => {
+            let bits = client
+                .read_coils(metric.address.unwrap(), 1)
+                .await
+                .context("reading coils")?;
+            let val = bits
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("empty coil response"))?;
+            let raw = if *val { 1.0 } else { 0.0 };
+            Ok(raw * metric.scale + metric.offset)
+        }
+        RegisterType::Discrete => {
+            let bits = client
+                .read_discrete_inputs(metric.address.unwrap(), 1)
+                .await
+                .context("reading discrete inputs")?;
+            let val = bits
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("empty discrete input response"))?;
+            let raw = if *val { 1.0 } else { 0.0 };
+            Ok(raw * metric.scale + metric.offset)
+        }
+    }
+}

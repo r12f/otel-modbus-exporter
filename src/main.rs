@@ -17,26 +17,26 @@ use clap::Parser;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use collector::{BusClient, BusClientFactory, CollectorEngine, DEFAULT_SHUTDOWN_TIMEOUT};
+use collector::{CollectorEngine, MetricReaderFactory, DEFAULT_SHUTDOWN_TIMEOUT};
 use config::{find_config_file, Cli, Config, Protocol};
 use internal_metrics::InternalMetrics;
 use logging::{init_logging, LogOutput, LoggingConfig};
 use metrics::MetricStore;
 use reader::modbus::{rtu::ModbusRtuMetricReader, tcp::ModbusTcpMetricReader};
 
-// ── Real Modbus client factory ────────────────────────────────────────
+// ── Real metric reader factory ────────────────────────────────────────
 
-struct RealBusClientFactory;
+struct RealMetricReaderFactory;
 
-impl BusClientFactory for RealBusClientFactory {
-    fn create(&self, collector: &config::CollectorConfig) -> Result<BusClient> {
+impl MetricReaderFactory for RealMetricReaderFactory {
+    fn create(&self, collector: &config::CollectorConfig) -> Result<Box<dyn reader::MetricReader>> {
         match &collector.protocol {
             Protocol::ModbusTcp { endpoint } => {
                 let slave_id = collector.slave_id.unwrap_or(1);
-                Ok(BusClient::Modbus(Box::new(ModbusTcpMetricReader::new(
+                Ok(Box::new(ModbusTcpMetricReader::new(
                     endpoint.clone(),
                     slave_id,
-                ))))
+                )))
             }
             Protocol::ModbusRtu {
                 device,
@@ -62,12 +62,9 @@ impl BusClientFactory for RealBusClientFactory {
                         config::Parity::Even => tokio_serial::Parity::Even,
                         config::Parity::Odd => tokio_serial::Parity::Odd,
                     });
-                Ok(BusClient::Modbus(Box::new(ModbusRtuMetricReader::new(
-                    builder, slave_id,
-                ))))
+                Ok(Box::new(ModbusRtuMetricReader::new(builder, slave_id)))
             }
             Protocol::I2c { bus, address } => {
-                // Use real LinuxI2cDevice on Linux, StubI2cDevice otherwise
                 #[cfg(target_os = "linux")]
                 let device: Box<dyn reader::i2c::I2cDevice> = {
                     let mut dev =
@@ -78,10 +75,10 @@ impl BusClientFactory for RealBusClientFactory {
                 #[cfg(not(target_os = "linux"))]
                 let device: Box<dyn reader::i2c::I2cDevice> = Box::new(reader::i2c::StubI2cDevice);
 
-                let client = reader::i2c::I2cMetricReader::new(device, bus.clone(), *address);
-                // Use shared per-bus lock via get_bus_lock
                 let bus_lock = reader::i2c::get_bus_lock(bus);
-                Ok(BusClient::I2c { client, bus_lock })
+                let client =
+                    reader::i2c::I2cMetricReader::new(device, bus.clone(), *address, bus_lock);
+                Ok(Box::new(client))
             }
             Protocol::Spi {
                 device,
@@ -104,12 +101,10 @@ impl BusClientFactory for RealBusClientFactory {
                 let spi_device: Box<dyn reader::spi::SpiDevice> =
                     Box::new(reader::spi::StubSpiDevice);
 
-                let client = reader::spi::SpiMetricReader::new(spi_device, device.clone());
                 let device_lock = reader::spi::get_device_lock(device);
-                Ok(BusClient::Spi {
-                    client,
-                    device_lock,
-                })
+                let client =
+                    reader::spi::SpiMetricReader::new(spi_device, device.clone(), device_lock);
+                Ok(Box::new(client))
             }
             Protocol::I3c {
                 bus,
@@ -140,10 +135,11 @@ impl BusClientFactory for RealBusClientFactory {
 
                 let client = reader::i3c::I3cMetricReader::new(device, bus.clone(), address_mode);
                 let bus_lock = reader::i3c::get_bus_lock(bus);
-                Ok(BusClient::I3c {
-                    client: std::sync::Arc::new(tokio::sync::Mutex::new(client)),
+                let handle = reader::i3c::I3cMetricReaderHandle::new(
+                    std::sync::Arc::new(tokio::sync::Mutex::new(client)),
                     bus_lock,
-                })
+                );
+                Ok(Box::new(handle))
             }
         }
     }
@@ -227,7 +223,7 @@ async fn main() -> Result<()> {
     // 5. Spawn collector tasks
     let global_labels: BTreeMap<String, String> =
         config.global_labels.clone().into_iter().collect();
-    let factory = RealBusClientFactory;
+    let factory = RealMetricReaderFactory;
     let engine = CollectorEngine::spawn(
         config.collectors.clone(),
         store.clone(),

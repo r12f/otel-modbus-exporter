@@ -130,6 +130,43 @@ impl ModbusReader for ModbusTcpMetricReader {
     }
 }
 
+#[async_trait]
+impl crate::reader::MetricReader for ModbusTcpMetricReader {
+    async fn connect(&mut self) -> Result<()> {
+        BusConnection::connect(self).await
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        BusConnection::disconnect(self).await
+    }
+
+    fn is_connected(&self) -> bool {
+        BusConnection::is_connected(self)
+    }
+
+    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
+        crate::reader::ReaderCapabilities { batch_read: true }
+    }
+
+    async fn read(&mut self, metric: &crate::config::MetricConfig) -> Result<f64> {
+        super::read_modbus_metric(self, metric).await
+    }
+
+    async fn batch_read<'a>(
+        &mut self,
+        metrics: &'a [crate::config::MetricConfig],
+    ) -> crate::reader::BatchReadResult<'a> {
+        let super::batch::BatchReadResult {
+            results,
+            read_count,
+        } = super::batch::batch_read_coalesced(self, metrics).await;
+        crate::reader::BatchReadResult {
+            results,
+            read_count,
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "tcp_tests.rs"]
 mod tcp_tests;

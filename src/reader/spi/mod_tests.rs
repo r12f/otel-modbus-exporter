@@ -60,7 +60,11 @@ async fn test_read_u8() {
     let mut responses = HashMap::new();
     responses.insert(vec![0x01], vec![0x2A]);
     let device = MockSpiDevice::new(responses);
-    let client = SpiMetricReader::new(Box::new(device), "/dev/spidev0.0".into());
+    let client = SpiMetricReader::new(
+        Box::new(device),
+        "/dev/spidev0.0".into(),
+        Arc::new(tokio::sync::Mutex::new(())),
+    );
 
     let metric = make_spi_metric("val", vec![0x01], None, 0, DataType::U8);
     let lock = make_device_lock();
@@ -74,7 +78,11 @@ async fn test_read_u16_with_offset() {
     // Command: 3 bytes, response: [0x00, 0x01, 0x00] -> skip byte 0, read u16 from bytes 1-2 = 256
     responses.insert(vec![0x06, 0x00, 0x00], vec![0x00, 0x01, 0x00]);
     let device = MockSpiDevice::new(responses);
-    let client = SpiMetricReader::new(Box::new(device), "/dev/spidev0.0".into());
+    let client = SpiMetricReader::new(
+        Box::new(device),
+        "/dev/spidev0.0".into(),
+        Arc::new(tokio::sync::Mutex::new(())),
+    );
 
     let metric = make_spi_metric("adc", vec![0x06, 0x00, 0x00], Some(3), 1, DataType::U16);
     let lock = make_device_lock();
@@ -87,7 +95,11 @@ async fn test_read_with_scale_offset() {
     let mut responses = HashMap::new();
     responses.insert(vec![0x06, 0x00, 0x00], vec![0x00, 0x00, 0x64]);
     let device = MockSpiDevice::new(responses);
-    let client = SpiMetricReader::new(Box::new(device), "/dev/spidev0.0".into());
+    let client = SpiMetricReader::new(
+        Box::new(device),
+        "/dev/spidev0.0".into(),
+        Arc::new(tokio::sync::Mutex::new(())),
+    );
 
     let mut metric = make_spi_metric("adc", vec![0x06, 0x00, 0x00], Some(3), 1, DataType::U16);
     metric.scale = 0.01;
@@ -117,7 +129,11 @@ async fn test_read_f32() {
     let mut responses = HashMap::new();
     responses.insert(vec![0x01], bytes.to_vec());
     let device = MockSpiDevice::new(responses);
-    let client = SpiMetricReader::new(Box::new(device), "/dev/spidev0.0".into());
+    let client = SpiMetricReader::new(
+        Box::new(device),
+        "/dev/spidev0.0".into(),
+        Arc::new(tokio::sync::Mutex::new(())),
+    );
 
     let metric = make_spi_metric(
         "pressure",
@@ -137,7 +153,11 @@ async fn test_zero_pad_tx_buffer() {
     let mut responses = HashMap::new();
     responses.insert(vec![0x06], vec![0x00, 0x01, 0x00]);
     let device = MockSpiDevice::new(responses);
-    let client = SpiMetricReader::new(Box::new(device), "/dev/spidev0.0".into());
+    let client = SpiMetricReader::new(
+        Box::new(device),
+        "/dev/spidev0.0".into(),
+        Arc::new(tokio::sync::Mutex::new(())),
+    );
 
     let metric = make_spi_metric("adc", vec![0x06], Some(3), 1, DataType::U16);
     let lock = make_device_lock();

@@ -102,6 +102,7 @@ pub struct SpiMetricReader {
     device: Arc<std::sync::Mutex<Box<dyn SpiDevice>>>,
     device_path: String,
     connected: bool,
+    device_lock: DeviceLock,
 }
 
 /// Per-device mutex map for serializing access to same chip-select.
@@ -117,11 +118,12 @@ pub fn get_device_lock(device_path: &str) -> DeviceLock {
 }
 
 impl SpiMetricReader {
-    pub fn new(device: Box<dyn SpiDevice>, device_path: String) -> Self {
+    pub fn new(device: Box<dyn SpiDevice>, device_path: String, device_lock: DeviceLock) -> Self {
         Self {
             device: Arc::new(std::sync::Mutex::new(device)),
             device_path,
             connected: false,
+            device_lock,
         }
     }
 
@@ -183,9 +185,9 @@ pub async fn read_spi_metric(
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-/// Connection and lifecycle trait implementation for `SpiMetricReader`.
+/// Unified MetricReader implementation for SPI.
 #[async_trait]
-impl crate::reader::modbus::BusConnection for SpiMetricReader {
+impl crate::reader::MetricReader for SpiMetricReader {
     async fn connect(&mut self) -> Result<()> {
         self.connected = true;
         Ok(())
@@ -198,6 +200,14 @@ impl crate::reader::modbus::BusConnection for SpiMetricReader {
 
     fn is_connected(&self) -> bool {
         self.connected
+    }
+
+    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
+        crate::reader::ReaderCapabilities { batch_read: false }
+    }
+
+    async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
+        read_spi_metric(self, metric, &Arc::clone(&self.device_lock)).await
     }
 }
 

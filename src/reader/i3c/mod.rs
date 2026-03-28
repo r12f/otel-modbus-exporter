@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::warn;
@@ -440,6 +441,48 @@ fn map_data_type(dt: config::DataType) -> decoder::DataType {
         config::DataType::I64 => decoder::DataType::I64,
         config::DataType::F64 => decoder::DataType::F64,
         config::DataType::Bool => decoder::DataType::Bool,
+    }
+}
+
+/// Wrapper around `Arc<Mutex<I3cMetricReader>>` + `BusLock` that implements `MetricReader`.
+pub struct I3cMetricReaderHandle {
+    client: Arc<tokio::sync::Mutex<I3cMetricReader>>,
+    bus_lock: BusLock,
+}
+
+impl I3cMetricReaderHandle {
+    pub fn new(client: Arc<tokio::sync::Mutex<I3cMetricReader>>, bus_lock: BusLock) -> Self {
+        Self { client, bus_lock }
+    }
+}
+
+#[async_trait]
+impl crate::reader::MetricReader for I3cMetricReaderHandle {
+    async fn connect(&mut self) -> Result<()> {
+        let mut c = self.client.lock().await;
+        c.connect().await
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        let mut c = self.client.lock().await;
+        c.disconnect().await
+    }
+
+    fn is_connected(&self) -> bool {
+        // If the lock is contended, conservatively report disconnected rather than
+        // silently masking a potential disconnection state.
+        self.client
+            .try_lock()
+            .map(|c| c.is_connected())
+            .unwrap_or(false)
+    }
+
+    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
+        crate::reader::ReaderCapabilities { batch_read: false }
+    }
+
+    async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
+        read_i3c_metric(&self.client, metric, &self.bus_lock).await
     }
 }
 
