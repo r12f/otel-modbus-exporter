@@ -9,34 +9,9 @@ use crate::collector::{CollectorEngine, DEFAULT_SHUTDOWN_TIMEOUT};
 use crate::config::{find_config_file, Cli, Config};
 use crate::exporter;
 use crate::internal_metrics::InternalMetrics;
-use crate::logging::{init_logging, LogOutput, LoggingConfig};
+use crate::logging::{init_logging, map_logging_config};
 use crate::metrics::MetricStore;
 use crate::reader::MetricReaderFactoryImpl;
-
-// ── Config → logging mapping ──────────────────────────────────────────
-
-pub fn map_logging_config(cfg: &crate::config::LoggingConfig) -> LoggingConfig {
-    let level = match cfg.level {
-        crate::config::LogLevel::Trace => "trace",
-        crate::config::LogLevel::Debug => "debug",
-        crate::config::LogLevel::Info => "info",
-        crate::config::LogLevel::Warn => "warn",
-        crate::config::LogLevel::Error => "error",
-    }
-    .to_string();
-
-    let output = match cfg.output {
-        crate::config::LogOutput::Stdout => LogOutput::Stdout,
-        crate::config::LogOutput::Stderr => LogOutput::Stderr,
-        // Syslog output is not yet implemented as a native syslog transport.
-        // We map it to structured JSON as an interim solution, because JSON
-        // is the closest machine-readable format and is easy to forward into
-        // syslog-compatible collectors (e.g. Vector, Fluentd, journald).
-        crate::config::LogOutput::Syslog => LogOutput::Json,
-    };
-
-    LoggingConfig { level, output }
-}
 
 // ── Shutdown signal ───────────────────────────────────────────────────
 

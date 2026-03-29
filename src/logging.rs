@@ -1,8 +1,38 @@
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::str::FromStr;
+
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+
+use crate::config;
+
+// ── Config → logging mapping ──────────────────────────────────────────
+
+/// Map the user-facing config::LoggingConfig to the internal LoggingConfig
+/// used by the tracing subscriber.
+pub fn map_logging_config(cfg: &config::LoggingConfig) -> LoggingConfig {
+    let level = match cfg.level {
+        config::LogLevel::Trace => "trace",
+        config::LogLevel::Debug => "debug",
+        config::LogLevel::Info => "info",
+        config::LogLevel::Warn => "warn",
+        config::LogLevel::Error => "error",
+    }
+    .to_string();
+
+    let output = match cfg.output {
+        config::LogOutput::Stdout => LogOutput::Stdout,
+        config::LogOutput::Stderr => LogOutput::Stderr,
+        // Syslog output is not yet implemented as a native syslog transport.
+        // We map it to structured JSON as an interim solution, because JSON
+        // is the closest machine-readable format and is easy to forward into
+        // syslog-compatible collectors (e.g. Vector, Fluentd, journald).
+        config::LogOutput::Syslog => LogOutput::Json,
+    };
+
+    LoggingConfig { level, output }
+}
 
 /// Logging output target.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

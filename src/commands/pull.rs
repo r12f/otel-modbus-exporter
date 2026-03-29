@@ -1,11 +1,56 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use regex::Regex;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{self, Config};
+use std::path::Path;
+
+use crate::config::{self, find_config_file, Config};
+use crate::logging::{init_logging, map_logging_config, LogOutput, LoggingConfig};
 use crate::reader::MetricReaderFactory;
 use crate::reader::MetricReaderFactoryImpl;
+
+/// Entry point for the `pull` subcommand.
+///
+/// Loads config, initialises logging (forced to stderr), and delegates to
+/// [`run_pull`] for the actual collection work.
+pub async fn pull_command(
+    cli_config: Option<&Path>,
+    collector: Option<&str>,
+    metric: Option<&str>,
+) -> Result<()> {
+    let config_path = find_config_file(cli_config).context("failed to find configuration file");
+    let config_path = match config_path {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Fatal: {e:#}");
+            std::process::exit(1);
+        }
+    };
+    let config = match Config::load_for_pull(&config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Fatal: failed to load configuration: {e:#}");
+            std::process::exit(1);
+        }
+    };
+    let logging_cfg = map_logging_config(&config.logging);
+    // For pull, force stderr output
+    let pull_logging = LoggingConfig {
+        level: logging_cfg.level,
+        output: LogOutput::Stderr,
+    };
+    init_logging(&pull_logging).context("failed to initialize logging")?;
+
+    let exit_code = match run_pull(&config, collector, metric).await {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("Fatal: {e:#}");
+            std::process::exit(1);
+        }
+    };
+    std::process::exit(exit_code);
+}
 
 fn protocol_str(protocol: &config::Protocol) -> &'static str {
     match protocol {
