@@ -27,16 +27,41 @@ pub trait MetricReader: Send {
     /// Whether the reader is connected.
     fn is_connected(&self) -> bool;
 
-    /// Read all configured metrics. Returns name → result mapping.
-    async fn read(&mut self) -> HashMap<String, Result<f64>>;
+    /// Read all configured metrics. Returns results and I/O count.
+    ///
+    /// The `cancel` token allows cooperative cancellation between individual
+    /// metric reads for fast shutdown on slow buses.
+    async fn read(&mut self, cancel: &CancellationToken) -> ReadResults;
+}
+
+/// Result of a [`MetricReader::read`] call, including I/O request count.
+pub struct ReadResults {
+    /// Per-metric results: `(raw_value, scaled_value)`.
+    pub metrics: HashMap<String, Result<(f64, f64)>>,
+    /// Number of actual I/O operations performed (e.g. coalesced Modbus reads).
+    pub io_count: usize,
 }
 ```
 
 **Error handling:** `Result` uses `anyhow::Result` — the collector logs errors and updates internal metrics (error counters). Transient errors (connection lost, timeout) trigger reconnect; permanent errors (invalid config) are logged once.
 
+## MetricReaderFactory
+
+A factory trait decouples reader creation from the collector, allowing tests to inject mock readers:
+
+```rust
+pub trait MetricReaderFactory: Send + Sync {
+    fn create(&self, collector: &config::CollectorConfig) -> Result<Box<dyn MetricReader>>;
+}
+
+pub struct MetricReaderFactoryImpl;
+```
+
+`MetricReaderFactoryImpl` inspects the protocol in `CollectorConfig` and creates the appropriate reader (`ModbusTcpMetricReader`, `ModbusRtuMetricReader`, `I2cMetricReader`, `SpiMetricReader`, `I3cMetricReaderHandle`).
+
 ## Design
 
-Each reader stores its configured metrics internally via `set_metrics()`. When `read()` is called, the reader iterates over all configured metrics and returns a `HashMap<String, Result<f64>>` mapping metric names to their results.
+Each reader stores its configured metrics internally via `set_metrics()`. When `read()` is called, the reader iterates over all configured metrics and returns a `ReadResults` struct containing a `HashMap<String, Result<(f64, f64)>>` mapping metric names to `(raw_value, scaled_value)` tuples, plus the number of actual I/O operations performed.
 
 Protocol-specific optimizations (e.g., Modbus register coalescing) are handled internally by each reader implementation — the collector doesn't need to know about batch capabilities.
 
@@ -49,17 +74,24 @@ Protocol-specific optimizations (e.g., Modbus register coalescing) are handled i
 | [SPI](spi.md) | None | Single-device reads |
 | [I3C](i3c.md) | None | Single-device reads |
 
+> **Note:** Non-Modbus readers (I2C, SPI, I3C) always return `metrics.len()` for `io_count`, since each metric requires a separate I/O operation (no coalescing).
+
 ## Source Layout
 
 ```text
 src/reader/
-  mod.rs              — MetricReader trait
+  mod.rs              — MetricReader trait, MetricReaderFactory
+  decoder.rs          — Register/byte decoding
+  decoder_tests.rs
   modbus/
     mod.rs            — Modbus MetricReader impl
     tcp.rs            — TCP transport
     tcp_tests.rs
     rtu.rs            — RTU transport
     rtu_tests.rs
+    batch.rs          — Register coalescing
+    batch/
+      batch_tests.rs
     mod_tests.rs
   i2c/
     mod.rs

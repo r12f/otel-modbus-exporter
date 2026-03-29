@@ -20,6 +20,7 @@ bus-exporter/
 │       └── sdm630.yaml
 ├── spec/
 │   ├── ci.md
+│   ├── cli.md
 │   ├── collector.md
 │   ├── config.md
 │   ├── decoder.md
@@ -28,6 +29,7 @@ bus-exporter/
 │   ├── export-mqtt.md
 │   ├── export-otlp.md
 │   ├── export-prometheus.md
+│   ├── exporter.md
 │   ├── i2c.md
 │   ├── i3c.md
 │   ├── internal-metrics.md
@@ -41,14 +43,30 @@ bus-exporter/
 │   └── testing.md
 ├── src/
 │   ├── main.rs
+│   ├── main_tests.rs
 │   ├── lib.rs
 │   ├── config.rs
 │   ├── config_tests.rs
+│   ├── collector.rs
+│   ├── collector_tests.rs
+│   ├── install.rs
+│   ├── internal_metrics.rs
+│   ├── internal_metrics_tests.rs
+│   ├── logging.rs
+│   ├── logging_tests.rs
+│   ├── metrics.rs
+│   ├── metrics_tests.rs
+│   ├── pull.rs
 │   ├── reader/
-│   │   ├── mod.rs              # MetricReader trait, ReaderCapabilities
+│   │   ├── mod.rs              # MetricReader trait, MetricReaderFactory
+│   │   ├── decoder.rs          # Register/byte decoding
+│   │   ├── decoder_tests.rs
 │   │   ├── modbus/
 │   │   │   ├── mod.rs          # Modbus MetricReader impl
 │   │   │   ├── mod_tests.rs
+│   │   │   ├── batch.rs        # Register coalescing
+│   │   │   ├── batch/
+│   │   │   │   └── batch_tests.rs
 │   │   │   ├── tcp.rs          # TCP transport
 │   │   │   ├── tcp_tests.rs
 │   │   │   ├── rtu.rs          # RTU transport
@@ -62,24 +80,17 @@ bus-exporter/
 │   │   └── i3c/
 │   │       ├── mod.rs
 │   │       └── mod_tests.rs
-│   ├── decoder.rs
-│   ├── decoder_tests.rs
-│   ├── logging.rs
-│   ├── logging_tests.rs
-│   ├── collector.rs
-│   ├── collector_tests.rs
-│   ├── metrics.rs
-│   ├── metrics_tests.rs
-│   ├── internal_metrics.rs
-│   ├── internal_metrics_tests.rs
 │   └── exporter/
 │       ├── mod.rs
-│       ├── otlp.rs
-│       ├── otlp_tests.rs
-│       ├── prometheus.rs
-│       ├── prometheus_tests.rs
-│       ├── mqtt.rs
-│       └── mqtt_tests.rs
+│       ├── otlp/
+│       │   ├── mod.rs
+│       │   └── mod_tests.rs
+│       ├── prometheus/
+│       │   ├── mod.rs
+│       │   └── mod_tests.rs
+│       └── mqtt/
+│           ├── mod.rs
+│           └── mod_tests.rs
 ├── tests/
 │   ├── integration_test.rs
 │   ├── e2e_modbus.rs
@@ -95,13 +106,15 @@ bus-exporter/
 main
 ├── config
 ├── logging
+├── pull
+├── install
 ├── collector
-│   ├── reader (MetricReader trait)
-│   │   ├── reader::modbus (tcp, rtu)
+│   ├── reader (MetricReader trait + MetricReaderFactory)
+│   │   ├── reader::decoder
+│   │   ├── reader::modbus (tcp, rtu, batch)
 │   │   ├── reader::i2c
 │   │   ├── reader::spi
 │   │   └── reader::i3c
-│   ├── decoder
 │   └── metrics
 ├── internal_metrics
 ├── exporter::otlp

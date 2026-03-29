@@ -27,13 +27,22 @@ This strict **producer/consumer separation** ensures:
 ### Polling Loop
 
 ```rust
+// CancellationToken for cooperative shutdown inside read()
+let cancel = CancellationToken::new();
+
 loop {
     let start = Instant::now();
     let mut local_cache = HashMap::new();
     let mut had_error = false;
-    for metric in &collector.metrics {
-        match read_metric(&mut client, metric).await {
-            Ok(value) => { local_cache.insert(metric.name.clone(), value); },
+
+    // Batch read all metrics via reader — returns ReadResults
+    let ReadResults { metrics: read_results, io_count } = client.read(&cancel).await;
+
+    for (metric_name, result) in read_results {
+        match result {
+            Ok((_raw, scaled)) => {
+                local_cache.insert(metric_name, MetricValue { value: scaled, /* ... */ });
+            },
             Err(e) => {
                 had_error = true;
                 log per-metric error;
@@ -42,11 +51,11 @@ loop {
             }
         }
     }
-    // Merge: for metrics that failed, carry forward from previous cache with fresh timestamp
+    // Merge: for metrics that failed, carry forward from previous cache
     for (name, prev) in &prev_cache {
         local_cache.entry(name.clone()).or_insert_with(|| {
             let mut carried = prev.clone();
-            carried.updated_at = SystemTime::now(); // Fresh timestamp so exporters see current time
+            carried.updated_at = SystemTime::now();
             carried
         });
     }

@@ -60,7 +60,8 @@ pub struct CollectorStats {
     pub polls_error: AtomicU64,
     pub read_requests: AtomicU64,
     pub read_errors: AtomicU64,
-    pub last_poll_duration_secs: AtomicF64,
+    /// Stored as `f64` bits via `AtomicU64` (`f64::to_bits` / `f64::from_bits`).
+    pub last_poll_duration_secs: AtomicU64,
 }
 ```
 

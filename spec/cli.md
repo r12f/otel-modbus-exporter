@@ -224,11 +224,3 @@ enum Command {
 | 0 | Success (all reads OK for pull) |
 | 1 | Partial failure (some reads failed for pull) |
 | 2 | Fatal error (bad config, bad regex, no matches) |
-
-### Raw Value
-
-The `raw_value` field requires the decoder to return both raw and scaled values.
-Current `decode()` returns only the final scaled value.
-Options:
-1. Add `decode_raw()` that returns `(raw_f64, scaled_f64)` — preferred.
-2. Reverse-compute raw from scaled — lossy, not recommended.

@@ -2,7 +2,29 @@
 
 ## Overview
 
-The decoder converts raw Modbus register values into typed metric values, applying byte order reordering, type casting, and scale+offset transformation.
+The decoder converts raw Modbus register values (or raw I2C/SPI bytes) into typed metric values, applying byte order reordering, type casting, and scale+offset transformation. It lives at `src/reader/decoder.rs` inside the reader module.
+
+## Return Type
+
+Both `decode()` and `decode_bytes()` return `Result<(f64, f64), DecodeError>` — a tuple of `(raw_value, scaled_value)`:
+
+- **`raw_value`** — The decoded numeric value before scale/offset is applied.
+- **`scaled_value`** — `raw_value * scale + offset`.
+
+```rust
+pub fn decode(registers: &[u16], data_type: DataType, byte_order: ByteOrder,
+              scale: f64, offset: f64) -> Result<(f64, f64), DecodeError>;
+
+pub fn decode_bytes(bytes: &[u8], data_type: DataType, byte_order: ByteOrder,
+                    scale: f64, offset: f64) -> Result<(f64, f64), DecodeError>;
+```
+
+## Config Mapping Functions
+
+These functions (moved from the former `bus.rs`) map config types to decoder types:
+
+- **`map_byte_order(config::ByteOrder) -> ByteOrder`** — Maps config byte order enum to decoder byte order.
+- **`map_data_type(config::DataType) -> DataType`** — Maps config data type enum to decoder data type.
 
 ## Byte Order Support
 

@@ -2,45 +2,43 @@
 
 ## Overview
 
-Exports metrics to an OpenTelemetry Collector via OTLP protobuf over HTTP (POST to `/v1/metrics`).
+Exports metrics to an OpenTelemetry Collector via the `opentelemetry-otlp` SDK over HTTP. The exporter uses the official `opentelemetry-sdk` pipeline — no hand-crafted protobuf encoding.
 
-**The OTLP exporter is a pure consumer.** It reads exclusively from the in-memory `MetricStore` (which aggregates per-collector caches). It never triggers Modbus calls or interacts with collectors directly.
+**The OTLP exporter is a pure consumer.** It reads exclusively from the in-memory `MetricStore` (which aggregates per-collector caches). It never triggers bus calls or interacts with collectors directly.
 
-## Protocol
+## SDK Pipeline
 
-- Transport: HTTP/1.1
-- Content-Type: `application/x-protobuf`
-- Endpoint: configured `endpoint` + `/v1/metrics`
-- Additional headers from config (e.g., Authorization).
+The exporter builds an `SdkMeterProvider` wired to a `PeriodicReader` with an OTLP HTTP metric exporter:
 
-## Batching Strategy
+1. **`opentelemetry_otlp::MetricExporter`** — HTTP exporter configured with endpoint, headers, and timeout from config.
+2. **`PeriodicReader`** — Drives collection on a configurable interval.
+3. **`SdkMeterProvider`** — Hosts the meter and manages the pipeline lifecycle.
+4. **`Resource`** — Built from `global_labels` config (key-value attributes).
 
-- Export runs on a fixed interval (10s default, tied to the fastest collector interval).
-- Each export sends ALL current metric values in a single `ExportMetricsServiceRequest`.
-- One `ResourceMetrics` with resource attributes from `global_labels`.
-- One `ScopeMetrics` with scope name `bus-exporter`.
-- One `Metric` entry per metric, containing a single data point.
+## Observable Instruments
 
-## Metric Mapping
+Metrics are exposed to the SDK via **observable instruments** (callback-based):
 
-| Internal Type | OTLP Type | Temporality |
-|---------------|-----------|-------------|
-| Gauge | Gauge | N/A |
-| Counter | Sum | Cumulative, monotonic |
+| Internal Type | OTel Instrument | Notes |
+|---------------|-----------------|-------|
+| Gauge | `f64_observable_gauge` | Callback reports current absolute value |
+| Counter | `f64_observable_counter` | Callback reports cumulative total; SDK computes deltas internally |
 
-Each data point includes:
+Instruments are registered lazily — as new metric names appear, they are registered once and cached. The callbacks read from shared state (`Arc<RwLock<Vec<MetricValue>>>`) which the main loop updates each interval.
 
-- `time_unix_nano`: timestamp of last poll
-- `attributes`: merged labels
-- `value`: as double
+## Export Flow
 
-## Retry with Backoff
+1. Each interval tick, the exporter reads all metrics from `MetricStore`.
+2. Registers observable instruments for any newly-discovered metric names.
+3. Updates the shared state that observable callbacks read from.
+4. The `PeriodicReader` handles actual export scheduling, serialization, and transmission — no manual `force_flush` is needed in the main loop.
+5. On shutdown, a final state update + `provider.shutdown()` ensures the last values are flushed.
 
-- On HTTP error (5xx, timeout, connection refused): retry with backoff.
-- Backoff: 1s → 2s → 4s → max 30s.
-- On 4xx (except 429): log error, do not retry.
-- On 429: respect `Retry-After` header if present.
-- Reset backoff after successful export.
+Internal metrics are exported under a separate scope (`bus-exporter-internal`).
+
+## Retry Behavior
+
+Retry behavior is delegated to the OpenTelemetry SDK defaults (exponential backoff with jitter: 5 second initial interval, maximum 30 second interval, up to 5 retry attempts — per the OTLP exporter specification). The exporter does not implement custom retry logic. The SDK's built-in retry and timeout handling applies.
 
 ## Configuration
 
