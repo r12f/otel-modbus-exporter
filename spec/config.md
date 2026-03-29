@@ -314,14 +314,14 @@ Result for `meter1`: `voltage` from override.yaml (no description — it wasn't 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `level` | `string` | No | `"info"` | Log level: `trace`, `debug`, `info`, `warn`, `error` |
-| `output` | `string` | No | `"syslog"` | Output target: `syslog`, `stdout`, `stderr` |
-| `syslog_facility` | `string` | No | `"daemon"` | Syslog facility (e.g., `daemon`, `local0`–`local7`) |
+| `output` | `string` | No | `"json"` | Output target: `json`, `stdout`, `stderr` |
+
+> **Note:** `"syslog"` is accepted as an alias for `"json"` (structured JSON to stderr) for backward compatibility, but native syslog transport is not implemented. Use `"json"` with journald or pipe to `logger` for syslog integration.
 
 ```yaml
 logging:
   level: "info"              # trace|debug|info|warn|error
-  output: "syslog"           # syslog|stdout|stderr
-  syslog_facility: "daemon"
+  output: "json"             # json|stdout|stderr (syslog accepted as alias for json)
 ```
 
 ## Validation Rules

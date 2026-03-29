@@ -46,10 +46,11 @@ bus-exporter/
 │   ├── main_tests.rs
 │   ├── lib.rs
 │   ├── commands/
-│   │   ├── mod.rs              # Re-exports install, pull, run
+│   │   ├── mod.rs              # Re-exports install, pull, run, watch; shared helpers (filter_collectors, collect_once)
 │   │   ├── install.rs          # systemd install/uninstall
 │   │   ├── pull.rs             # One-shot metric pull
-│   │   └── run.rs              # Daemon entry point, logging mapping, shutdown
+│   │   ├── run.rs              # Daemon entry point, logging mapping, shutdown
+│   │   └── watch.rs            # Continuous metric watch (NDJSON loop)
 │   ├── config.rs
 │   ├── config_tests.rs
 │   ├── collector.rs
@@ -98,6 +99,9 @@ bus-exporter/
 │   ├── common/
 │   │   └── mod.rs
 │   ├── e2e_modbus.rs
+│   ├── e2e_modbus_rtu.rs
+│   ├── e2e_i2c.rs
+│   ├── e2e_spi.rs
 └── assets/
     ├── logo.svg
     └── logo.png
@@ -112,7 +116,8 @@ main
 ├── commands
 │   ├── install
 │   ├── pull
-│   └── run
+│   ├── run
+│   └── watch
 ├── collector
 │   ├── reader (MetricReader trait + MetricReaderFactory)
 │   │   ├── reader::decoder

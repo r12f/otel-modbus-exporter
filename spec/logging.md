@@ -11,7 +11,7 @@ All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem.
 | `tracing` | Spans, events, `#[instrument]` macro |
 | `tracing-subscriber` | Subscriber/layer composition |
 
-> **Note on syslog:** Native syslog support is not currently implemented. The `output` config accepts `"json"` which produces **structured JSON output on stderr**, suitable for consumption by syslog daemons (e.g., via `journald` or piped to `logger`). Native syslog support is planned for a future release.
+> **Note on syslog:** Native syslog is not planned. Use `output: "json"` with journald or pipe to `logger` for syslog integration. For distributed tracing, use the OTLP exporter.
 
 ## Guidelines
 

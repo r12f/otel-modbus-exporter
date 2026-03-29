@@ -2,10 +2,11 @@
 
 ## Overview
 
-`bus-exporter` supports three modes of operation via subcommands:
+`bus-exporter` supports four modes of operation via subcommands:
 
 - **`run`** (default) — Start as a daemon, continuously polling collectors and exporting metrics.
 - **`pull`** — Single-shot read: connect, read metrics once, print JSON, exit.
+- **`watch`** — Continuous metric tracing: pull in a loop, print NDJSON to stdout.
 - **`install`** — Install bus-exporter as a system service (systemd).
 
 When no subcommand is given, `run` is assumed (backward-compatible).
@@ -101,6 +102,50 @@ Field definitions:
 - JSON output goes to stdout only.
 - This allows `bus-exporter pull 2>/dev/null` for clean JSON.
 
+## `watch` Subcommand
+
+Continuous metric tracing. Pulls metrics in a loop, printing NDJSON to stdout.
+
+```
+bus-exporter watch [OPTIONS]
+
+Options:
+  --collector <REGEX>    Filter collectors by name (regex, partial match)
+  --metric <REGEX>       Filter metrics by name (regex, partial match)
+  --interval <DURATION>  Override polling interval (e.g. "1s", "500ms")
+```
+
+### Behavior
+
+1. Load config file (same search path as `run`).
+2. Filter collectors and metrics (same logic as `pull`).
+3. Loop:
+   a. For each matching collector: connect → read → print JSON → disconnect.
+   b. Sleep for `--interval` (or collector's `polling_interval` from config).
+   c. Repeat until Ctrl+C (SIGINT/SIGTERM) for graceful stop.
+
+### Output
+
+NDJSON (one JSON object per line per iteration) to stdout. Each object has the same collector/metric JSON structure as `pull`, plus:
+
+- `timestamp` — RFC 3339 timestamp of the iteration start.
+- `iteration` — 1-based counter.
+
+On exit, a `watch_summary` is printed to stderr with total iterations, successes, and failures.
+
+### Logging
+
+- Logs go to stderr (same logging config as `run`).
+- NDJSON output goes to stdout only.
+- `watch_summary` goes to stderr.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | All iterations completed successfully |
+| 2 | Any iteration had failures |
+
 ## `install` Subcommand
 
 Install bus-exporter as a systemd service.
@@ -194,6 +239,18 @@ enum Command {
         #[arg(long)]
         metric: Option<String>,
     },
+    /// Continuous metric watch (NDJSON loop)
+    Watch {
+        /// Filter collectors by name (regex)
+        #[arg(long)]
+        collector: Option<String>,
+        /// Filter metrics by name (regex)
+        #[arg(long)]
+        metric: Option<String>,
+        /// Override polling interval (e.g. "1s", "500ms")
+        #[arg(long)]
+        interval: Option<String>,
+    },
     /// Install as system service
     Install {
         /// Install as user service
@@ -216,6 +273,7 @@ enum Command {
 
 - `regex` crate (add to Cargo.toml)
 - `serde_json` for pull output (already a transitive dep, add as direct)
+- `humantime` for parsing duration strings in watch `--interval`
 
 ### Exit Codes
 

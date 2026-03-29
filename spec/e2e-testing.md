@@ -2,61 +2,73 @@
 
 ## Overview
 
-- E2E tests validate the full pipeline: Modbus device → collector → cache → Prometheus exporter
-- Uses a **Rust-native Modbus TCP simulator** (via `tokio-modbus` server API) — no Docker required
-- Uses Prometheus `/metrics` scrape endpoint to validate exported values
+E2E tests validate the full pipeline for multiple protocols: Modbus TCP, Modbus RTU, I2C, and SPI. All tests use a shared test harness in `tests/common/mod.rs` — no Docker required.
 
 ## Architecture
 
+### Shared Test Harness (`tests/common/mod.rs`)
+
+| Component | Description |
+|-----------|-------------|
+| `TestFixtures` / `standard_fixtures()` | Shared test data (register values, expected metrics) |
+| `ConnectionParams` enum | Protocol-specific connection info: `ModbusTcp`, `ModbusRtu`, `I2c`, `Spi` |
+| `generate_config()` | Generates a YAML config from fixtures + connection params |
+| `run_pull()` | Runs `bus-exporter pull` as an async child process |
+| `validate()` | Asserts metric output matches expected values |
+| `run_e2e_workflow()` | Orchestrates the full flow: config → pull → assert → validate |
+
 ```text
-Rust Modbus TCP simulator (in-process) → bus-exporter (child process) → Prometheus /metrics → test assertions
+Test harness (generate_config + simulator) → bus-exporter pull (child process) → JSON output → validate()
 ```
 
-## Test Implementation
+## Protocol-Specific Tests
 
-The e2e test is a Rust integration test at `tests/e2e_modbus.rs` that:
+### `e2e_modbus.rs` — Modbus TCP
 
-1. **Starts an in-process Modbus TCP simulator** using `tokio-modbus` server API on a random port
-2. **Generates a test config** pointing bus-exporter at the simulator
-3. **Starts bus-exporter** as a child process with `--config <temp-config>`
-4. **Waits** for the Prometheus `/metrics` endpoint to become available
-5. **Scrapes and validates** metric output (names, types, labels, values with float tolerance)
-6. **Sends SIGTERM** and verifies graceful shutdown (exit code 0)
+- Starts an **in-process Modbus TCP simulator** using `tokio-modbus` server API on a random port.
+- Generates test config pointing at the simulator.
+- Runs `bus-exporter pull` and validates JSON output.
+- No special requirements — runs on any machine with Rust toolchain.
 
-## Simulator Register Values
+### `e2e_modbus_rtu.rs` — Modbus RTU
 
-Pre-loaded register values matching `config/modbus-simulator.json`:
+- Uses **socat** to create a virtual serial pair.
+- Spawns a mock RTU responder that handles Modbus RTU frames with CRC-16.
+- Generates test config with the virtual serial device.
+- Marked `#[ignore]` — requires `socat` installed.
 
-| Register Type | Address | Raw Value | Meaning | Data Type | Byte Order |
-|---------------|---------|-----------|---------|-----------|------------|
-| holding | 0 | 2300 | 230.0V (scale 0.1) | u16 | big_endian |
-| holding | 16,17 | 1, 24464 (u32=90000) | 900.00 kWh (scale 0.01) | u32 | big_endian |
-| input | 0 | 65436 (i16=-100) | 30.0°C (scale 0.1, offset +40.0) | i16 | big_endian |
-| holding | 32,33 | 0x4348, 0x0000 (f32=200.0) | 200.0 Hz (scale 1.0) | f32 | big_endian |
-| holding | 48,49 | 24464, 1 (u32=90000) | 900.00 kWh (scale 0.01) | u32 | mid_big_endian |
+### `e2e_i2c.rs` — I2C
 
-## Expected Metrics
+- Uses the **i2c-stub** kernel module to create a virtual I2C bus.
+- Pre-loads register values into the stub device.
+- Marked `#[ignore]` — requires root and `i2c-stub` kernel module.
 
-| Metric Name | Expected Value | Type | Labels |
-|-------------|---------------|------|--------|
-| `bus_voltage_phase_a_V` | 230.0 | gauge | env="test", site="e2e", device="simulator" |
-| `bus_total_energy_kWh` | 900.0 | counter | env="test", site="e2e", device="simulator" |
-| `bus_temperature_C` | 30.0 | gauge | env="test", site="e2e", device="simulator" |
-| `bus_frequency_Hz` | 200.0 | gauge | env="test", site="e2e", device="simulator" |
-| `bus_total_energy_mid_kWh` | 900.0 | counter | env="test", site="e2e", device="simulator" |
+### `e2e_spi.rs` — SPI
+
+- Uses **spidev loopback** for full-duplex testing.
+- Marked `#[ignore]` — requires a spidev device.
+- Also contains a non-ignored `spi_config_generation` unit test that validates SPI config generation without hardware.
 
 ## Running
 
 ```bash
-# Via Makefile
-make e2e
+# Run non-ignored tests only (Modbus TCP + SPI config generation)
+cargo test --test 'e2e_*'
 
-# Via cargo directly
-cargo test --test e2e_modbus -- --nocapture
+# Run hardware-dependent tests only (requires socat, root, spidev)
+cargo test --test 'e2e_*' -- --ignored
+
+# Run all e2e tests
+cargo test --test 'e2e_*' -- --include-ignored
 ```
 
 ## CI Integration
 
-- E2E tests run in the `e2e` job in `.github/workflows/ci.yml`
-- No Docker required — runs on any GitHub-hosted runner with Rust toolchain
-- Previously paused due to Docker Hub rate-limiting of `oitc/modbus-server`; now fully native
+- E2E tests run in the `e2e` job in `.github/workflows/ci.yml`:
+
+  ```bash
+  cargo test --test 'e2e_*' -- --nocapture
+  ```
+
+- Hardware-dependent tests are auto-skipped via `#[ignore]`.
+- No Docker required — runs on any GitHub-hosted runner with Rust toolchain.
