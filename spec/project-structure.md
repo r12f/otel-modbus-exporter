@@ -45,18 +45,21 @@ bus-exporter/
 │   ├── main.rs
 │   ├── main_tests.rs
 │   ├── lib.rs
+│   ├── commands/
+│   │   ├── mod.rs              # Re-exports install, pull, run
+│   │   ├── install.rs          # systemd install/uninstall
+│   │   ├── pull.rs             # One-shot metric pull
+│   │   └── run.rs              # Daemon entry point, logging mapping, shutdown
 │   ├── config.rs
 │   ├── config_tests.rs
 │   ├── collector.rs
 │   ├── collector_tests.rs
-│   ├── install.rs
 │   ├── internal_metrics.rs
 │   ├── internal_metrics_tests.rs
 │   ├── logging.rs
 │   ├── logging_tests.rs
 │   ├── metrics.rs
 │   ├── metrics_tests.rs
-│   ├── pull.rs
 │   ├── reader/
 │   │   ├── mod.rs              # MetricReader trait, MetricReaderFactory
 │   │   ├── decoder.rs          # Register/byte decoding
@@ -106,8 +109,10 @@ bus-exporter/
 main
 ├── config
 ├── logging
-├── pull
-├── install
+├── commands
+│   ├── install
+│   ├── pull
+│   └── run
 ├── collector
 │   ├── reader (MetricReader trait + MetricReaderFactory)
 │   │   ├── reader::decoder
