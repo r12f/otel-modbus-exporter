@@ -19,12 +19,12 @@ async fn main() -> Result<()> {
             bin,
             uninstall,
         }) => commands::install::run_install(user, config, bin, uninstall),
-        Some(Command::Trace {
+        Some(Command::Watch {
             collector,
             metric,
             interval,
         }) => {
-            commands::trace::trace_command(
+            commands::watch::watch_command(
                 cli.config.as_deref().map(Path::new),
                 collector.as_deref(),
                 metric.as_deref(),

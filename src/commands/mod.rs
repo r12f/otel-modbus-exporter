@@ -1,7 +1,7 @@
 pub mod install;
 pub mod pull;
 pub mod run;
-pub mod trace;
+pub mod watch;
 
 use anyhow::Result;
 use regex::Regex;
@@ -45,7 +45,7 @@ pub fn filter_collectors(
     Ok(filtered)
 }
 
-/// Shared collection logic used by both `pull` and `trace`.
+/// Shared collection logic used by both `pull` and `watch`.
 ///
 /// Connects to each collector, reads metrics, and returns JSON objects plus
 /// counters. Returns `(collectors_json, total_metrics, successful, failed)`.

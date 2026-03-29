@@ -33,8 +33,8 @@ pub enum Command {
         #[arg(long)]
         metric: Option<String>,
     },
-    /// Continuous metric tracing — pull in a loop, print to stdout
-    Trace {
+    /// Continuous metric watching — pull in a loop, print to stdout
+    Watch {
         /// Filter collectors by name (regex, partial match)
         #[arg(long)]
         collector: Option<String>,
