@@ -94,14 +94,14 @@ async fn main() -> Result<()> {
                 Ok(p) => p,
                 Err(e) => {
                     eprintln!("Fatal: {e:#}");
-                    std::process::exit(2);
+                    std::process::exit(1);
                 }
             };
             let config = match Config::load_for_pull(&config_path) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("Fatal: failed to load configuration: {e:#}");
-                    std::process::exit(2);
+                    std::process::exit(1);
                 }
             };
             let logging_cfg = map_logging_config(&config.logging);
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
                     Ok(code) => code,
                     Err(e) => {
                         eprintln!("Fatal: {e:#}");
-                        std::process::exit(2);
+                        std::process::exit(1);
                     }
                 };
             std::process::exit(exit_code);

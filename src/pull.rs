@@ -166,7 +166,7 @@ pub async fn run_pull(
     println!("{}", serde_json::to_string_pretty(&output)?);
 
     if failed > 0 {
-        Ok(1)
+        Ok(2)
     } else {
         Ok(0)
     }

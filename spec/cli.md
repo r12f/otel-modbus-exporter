@@ -46,7 +46,7 @@ Options:
    d. Call `read()` once.
    e. Call `disconnect()`.
 6. Print JSON to stdout.
-7. Exit code 0 if all reads succeed, 1 if any read fails.
+7. Exit code 0 if all reads succeed, 2 if any read fails.
 
 ### Regex Behavior
 
@@ -222,5 +222,5 @@ enum Command {
 | Code | Meaning |
 |------|---------|
 | 0 | Success (all reads OK for pull) |
-| 1 | Partial failure (some reads failed for pull) |
-| 2 | Fatal error (bad config, bad regex, no matches) |
+| 1 | Fatal error (bad config, bad regex, no matches, no systemd, platform errors) |
+| 2 | Partial failure (some/all metric reads failed for pull) |
