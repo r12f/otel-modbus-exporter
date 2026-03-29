@@ -21,7 +21,7 @@ WantedBy={wanted_by}
 
 const SERVICE_NAME: &str = "bus-exporter.service";
 
-pub fn run_install(
+pub fn install_command(
     user: bool,
     config_path: Option<PathBuf>,
     bin_path: Option<PathBuf>,

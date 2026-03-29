@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
             config,
             bin,
             uninstall,
-        }) => commands::install::run_install(user, config, bin, uninstall),
+        }) => commands::install::install_command(user, config, bin, uninstall),
         Some(Command::Watch {
             collector,
             metric,
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
             )
             .await
         }
-        Some(Command::Run) | None => commands::run::run_daemon(cli).await,
+        Some(Command::Run) | None => commands::run::run_command(cli).await,
     }
 }
 

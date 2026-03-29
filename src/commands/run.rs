@@ -37,7 +37,7 @@ pub async fn shutdown_signal() {
 
 // ── Run daemon ────────────────────────────────────────────────────────
 
-pub async fn run_daemon(cli: Cli) -> Result<()> {
+pub async fn run_command(cli: Cli) -> Result<()> {
     let config_path =
         find_config_file(cli.config.as_deref()).context("failed to find configuration file")?;
     let config = Config::load(&config_path).context("failed to load configuration")?;
