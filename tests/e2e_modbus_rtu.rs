@@ -157,6 +157,22 @@ fn handle_rtu_request(frame: &[u8], store: &RegisterStore) -> Option<Vec<u8>> {
     Some(response)
 }
 
+/// Try to extract a complete Modbus RTU frame from the buffer.
+/// Returns the frame length if a valid frame is found, or `None` if more data is needed.
+fn try_extract_frame(buf: &[u8]) -> Option<usize> {
+    // Minimum RTU request: slave(1) + fc(1) + addr(2) + count(2) + crc(2) = 8
+    if buf.len() < 8 {
+        return None;
+    }
+    // Try all plausible lengths starting from 8
+    for len in 8..=buf.len() {
+        if verify_crc(&buf[..len]) {
+            return Some(len);
+        }
+    }
+    None
+}
+
 /// Run the mock RTU responder on the given PTY device path.
 /// Blocks until the stop flag is set or an error occurs.
 fn run_mock_rtu_responder(
@@ -169,17 +185,26 @@ fn run_mock_rtu_responder(
         .open()
         .unwrap_or_else(|e| panic!("failed to open PTY {}: {}", pty_path, e));
 
-    let mut buf = [0u8; 256];
+    let mut accum = Vec::with_capacity(256);
+    let mut tmp = [0u8; 256];
     while !stop.load(std::sync::atomic::Ordering::Relaxed) {
-        match port.read(&mut buf) {
-            Ok(n) if n >= 8 => {
-                if let Some(response) = handle_rtu_request(&buf[..n], &store) {
-                    std::thread::sleep(std::time::Duration::from_millis(5));
-                    let _ = port.write_all(&response);
-                    let _ = port.flush();
+        match port.read(&mut tmp) {
+            Ok(n) => {
+                accum.extend_from_slice(&tmp[..n]);
+                // Try to extract a complete frame from accumulated bytes
+                while let Some(frame_len) = try_extract_frame(&accum) {
+                    let frame: Vec<u8> = accum.drain(..frame_len).collect();
+                    if let Some(response) = handle_rtu_request(&frame, &store) {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        let _ = port.write_all(&response);
+                        let _ = port.flush();
+                    }
+                }
+                // Prevent unbounded accumulation if we get garbage
+                if accum.len() > 512 {
+                    accum.clear();
                 }
             }
-            Ok(_) => {}
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
             Err(_) => break,
         }
@@ -187,6 +212,45 @@ fn run_mock_rtu_responder(
 }
 
 // ── Socat PTY pair helper ─────────────────────────────────────────────
+
+/// RAII guard that cleans up the socat child process and responder thread on drop.
+/// Prevents zombie processes if assertions panic.
+struct TestGuard {
+    socat_child: Option<std::process::Child>,
+    responder_handle: Option<std::thread::JoinHandle<()>>,
+    stop_flag: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl TestGuard {
+    fn new(
+        socat_child: std::process::Child,
+        stop_flag: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        Self {
+            socat_child: Some(socat_child),
+            responder_handle: None,
+            stop_flag,
+        }
+    }
+
+    fn set_responder(&mut self, handle: std::thread::JoinHandle<()>) {
+        self.responder_handle = Some(handle);
+    }
+}
+
+impl Drop for TestGuard {
+    fn drop(&mut self) {
+        self.stop_flag
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(handle) = self.responder_handle.take() {
+            let _ = handle.join();
+        }
+        if let Some(mut child) = self.socat_child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
 
 /// Spawn socat to create a virtual serial pair. Returns (pty1, pty2, child).
 fn spawn_socat() -> (String, String, std::process::Child) {
@@ -205,20 +269,44 @@ fn spawn_socat() -> (String, String, std::process::Child) {
 
     let mut ptys = Vec::new();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut remaining_stderr: Option<std::io::BufReader<std::process::ChildStderr>> = None;
 
-    for line in reader.lines() {
+    // We need to consume lines to find PTY paths, then drain the rest in a thread.
+    // BufReader consumes the inner reader, so we use lines() and break out.
+    let mut lines_iter = reader;
+
+    loop {
         if std::time::Instant::now() > deadline {
             panic!("timed out waiting for socat PTY paths");
         }
-        let line = line.expect("failed to read socat stderr");
-        // socat logs lines like: ... N PTY is /dev/pts/X
-        if let Some(pos) = line.find("PTY is ") {
-            let pty_path = line[pos + 7..].trim().to_string();
-            ptys.push(pty_path);
-            if ptys.len() == 2 {
-                break;
+        let mut line = String::new();
+        match lines_iter.read_line(&mut line) {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                if let Some(pos) = line.find("PTY is ") {
+                    let pty_path = line[pos + 7..].trim().to_string();
+                    ptys.push(pty_path);
+                    if ptys.len() == 2 {
+                        remaining_stderr = Some(lines_iter);
+                        break;
+                    }
+                }
             }
+            Err(e) => panic!("failed to read socat stderr: {}", e),
         }
+    }
+
+    // Spawn a thread to drain remaining socat stderr to prevent blocking/SIGPIPE
+    if let Some(mut stderr_reader) = remaining_stderr {
+        std::thread::spawn(move || {
+            let mut discard = [0u8; 1024];
+            loop {
+                match std::io::Read::read(&mut stderr_reader, &mut discard) {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {}
+                }
+            }
+        });
     }
 
     assert_eq!(
@@ -243,23 +331,26 @@ async fn e2e_modbus_rtu_pull() {
     let fixtures = standard_fixtures();
 
     // 1. Create virtual serial pair via socat
-    let (pty_responder, pty_exporter, mut socat_child) = spawn_socat();
+    let (pty_responder, pty_exporter, socat_child) = spawn_socat();
     eprintln!(
         "socat PTYs: responder={}, exporter={}",
         pty_responder, pty_exporter
     );
+
+    let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut guard = TestGuard::new(socat_child, stop_flag.clone());
 
     // Small delay for PTYs to be ready
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     // 2. Start mock RTU responder on one PTY
     let store = Arc::new(RegisterStore::from_fixtures(&fixtures));
-    let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stop_clone = stop_flag.clone();
     let pty_resp = pty_responder.clone();
     let responder_handle = std::thread::spawn(move || {
         run_mock_rtu_responder(&pty_resp, store, stop_clone);
     });
+    guard.set_responder(responder_handle);
 
     // 3. Generate config pointing at the other PTY
     let tmp = tempfile::tempdir().unwrap();
@@ -283,8 +374,6 @@ async fn e2e_modbus_rtu_pull() {
     // 5. Validate results
     common::validate(&result, &fixtures);
 
-    // Cleanup
-    stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
-    let _ = responder_handle.join();
-    let _ = socat_child.kill();
+    // Cleanup handled by TestGuard's Drop impl
+    drop(guard);
 }
