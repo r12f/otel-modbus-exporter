@@ -4,6 +4,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::info;
@@ -326,6 +327,18 @@ pub enum Protocol {
         #[serde(default)]
         instance: Option<u8>,
     },
+}
+
+impl fmt::Display for Protocol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Protocol::ModbusTcp { .. } => write!(f, "modbus-tcp"),
+            Protocol::ModbusRtu { .. } => write!(f, "modbus-rtu"),
+            Protocol::I2c { .. } => write!(f, "i2c"),
+            Protocol::Spi { .. } => write!(f, "spi"),
+            Protocol::I3c { .. } => write!(f, "i3c"),
+        }
+    }
 }
 
 fn default_spi_speed_hz() -> u32 {

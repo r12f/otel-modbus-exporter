@@ -52,16 +52,6 @@ pub async fn pull_command(
     std::process::exit(exit_code);
 }
 
-fn protocol_str(protocol: &config::Protocol) -> &'static str {
-    match protocol {
-        config::Protocol::ModbusTcp { .. } => "modbus-tcp",
-        config::Protocol::ModbusRtu { .. } => "modbus-rtu",
-        config::Protocol::I2c { .. } => "i2c",
-        config::Protocol::Spi { .. } => "spi",
-        config::Protocol::I3c { .. } => "i3c",
-    }
-}
-
 pub async fn run_pull(
     config: &Config,
     collector_filter: Option<&str>,
@@ -121,7 +111,7 @@ pub async fn run_pull(
                         "error": format!("collector create failed: {e}")
                     }));
                 }
-                let protocol_name = protocol_str(&collector.protocol);
+                let protocol_name = collector.protocol.to_string();
                 collectors_json.push(json!({
                     "name": collector.name,
                     "protocol": protocol_name,
@@ -144,7 +134,7 @@ pub async fn run_pull(
                     "error": format!("connect failed: {e}")
                 }));
             }
-            let protocol_name = protocol_str(&collector.protocol);
+            let protocol_name = collector.protocol.to_string();
             collectors_json.push(json!({
                 "name": collector.name,
                 "protocol": protocol_name,
@@ -189,7 +179,7 @@ pub async fn run_pull(
             }
         }
 
-        let protocol_name = protocol_str(&collector.protocol);
+        let protocol_name = collector.protocol.to_string();
 
         collectors_json.push(json!({
             "name": collector.name,
