@@ -36,6 +36,7 @@ pub async fn watch_command(
     let watch_logging = LoggingConfig {
         level: logging_cfg.level,
         output: LogOutput::Stderr,
+        syslog_facility: logging_cfg.syslog_facility,
     };
     init_logging(&watch_logging).context("failed to initialize logging")?;
 

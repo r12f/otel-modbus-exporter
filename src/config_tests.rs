@@ -265,7 +265,7 @@ collectors:
 fn test_defaults() {
     let c = parse(&minimal_yaml()).unwrap();
     assert_eq!(c.logging.level, LogLevel::Info);
-    assert_eq!(c.logging.output, LogOutput::Json);
+    assert_eq!(c.logging.output, LogOutput::Syslog);
     assert_eq!(c.logging.syslog_facility, SyslogFacility::Daemon);
     let p = c.exporters.prometheus.as_ref().unwrap();
     assert_eq!(p.listen, "0.0.0.0:9090");

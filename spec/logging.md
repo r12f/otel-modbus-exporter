@@ -11,7 +11,7 @@ All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem.
 | `tracing` | Spans, events, `#[instrument]` macro |
 | `tracing-subscriber` | Subscriber/layer composition |
 
-> **Note on syslog:** Native syslog is not planned. The config value `"syslog"` is a legacy alias for `"json"` (kept for backward compatibility). Use `output: "json"` with journald or pipe to `logger` for syslog integration. For distributed tracing, use the OTLP exporter.
+> **Syslog support:** Native syslog output is available via `output: "syslog"`. See [export-syslog.md](export-syslog.md) for the full syslog specification including facility configuration and fallback behavior.
 
 ## Guidelines
 
@@ -67,6 +67,7 @@ The output layer is initialized at startup based on the `logging` section in `co
 
 | `output` value | Behavior |
 |----------------|----------|
+| `"syslog"` | Native syslog via Unix socket (default). See [export-syslog.md](export-syslog.md). |
 | `"stdout"` | Structured text format to stdout |
 | `"stderr"` | Structured text format to stderr |
 | `"json"` | Structured JSON to stderr (suitable for journald/syslog ingestion) |
@@ -78,5 +79,6 @@ See [config.md](config.md) for the `logging` YAML section:
 ```yaml
 logging:
   level: "info"              # trace|debug|info|warn|error
-  output: "json"             # json|stdout|stderr
+  output: "syslog"           # syslog|json|stdout|stderr (default: syslog)
+  syslog_facility: "daemon"  # daemon|local0-local7 (default: daemon, only used with syslog output)
 ```

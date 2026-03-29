@@ -7,8 +7,8 @@ global_labels:
 
 logging:
   level: info
-  output: syslog
-  syslog_facility: daemon
+  # output: "syslog"           # native syslog via unix socket (default on Linux)
+  # syslog_facility: "daemon"  # daemon|local0-local7
 
 exporters:
   otlp:

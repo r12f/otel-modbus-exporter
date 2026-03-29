@@ -38,6 +38,7 @@ pub async fn pull_command(
     let pull_logging = LoggingConfig {
         level: logging_cfg.level,
         output: LogOutput::Stderr,
+        syslog_facility: logging_cfg.syslog_facility,
     };
     init_logging(&pull_logging).context("failed to initialize logging")?;
 
