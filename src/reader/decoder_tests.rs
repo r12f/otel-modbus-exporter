@@ -62,7 +62,9 @@ fn u64_to_regs_mle(val: u64) -> Vec<u16> {
 #[test]
 fn test_bool_true() {
     assert_eq!(
-        decode(&[1], DataType::Bool, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[1], DataType::Bool, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         1.0
     );
 }
@@ -70,7 +72,9 @@ fn test_bool_true() {
 #[test]
 fn test_bool_false() {
     assert_eq!(
-        decode(&[0], DataType::Bool, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[0], DataType::Bool, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         0.0
     );
 }
@@ -78,7 +82,9 @@ fn test_bool_false() {
 #[test]
 fn test_bool_nonzero() {
     assert_eq!(
-        decode(&[255], DataType::Bool, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[255], DataType::Bool, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         1.0
     );
 }
@@ -86,11 +92,15 @@ fn test_bool_nonzero() {
 #[test]
 fn test_bool_inversion() {
     assert_eq!(
-        decode(&[1], DataType::Bool, ByteOrder::BigEndian, -1.0, 1.0).unwrap(),
+        decode(&[1], DataType::Bool, ByteOrder::BigEndian, -1.0, 1.0)
+            .unwrap()
+            .1,
         0.0
     );
     assert_eq!(
-        decode(&[0], DataType::Bool, ByteOrder::BigEndian, -1.0, 1.0).unwrap(),
+        decode(&[0], DataType::Bool, ByteOrder::BigEndian, -1.0, 1.0)
+            .unwrap()
+            .1,
         1.0
     );
 }
@@ -99,7 +109,9 @@ fn test_bool_inversion() {
 #[test]
 fn test_u16_basic() {
     assert_eq!(
-        decode(&[12345], DataType::U16, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[12345], DataType::U16, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         12345.0
     );
 }
@@ -107,7 +119,9 @@ fn test_u16_basic() {
 #[test]
 fn test_u16_max() {
     assert_eq!(
-        decode(&[65535], DataType::U16, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[65535], DataType::U16, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         65535.0
     );
 }
@@ -115,7 +129,9 @@ fn test_u16_max() {
 #[test]
 fn test_u16_zero() {
     assert_eq!(
-        decode(&[0], DataType::U16, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[0], DataType::U16, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         0.0
     );
 }
@@ -123,7 +139,9 @@ fn test_u16_zero() {
 #[test]
 fn test_u16_scale_offset() {
     assert_eq!(
-        decode(&[100], DataType::U16, ByteOrder::BigEndian, 0.1, 5.0).unwrap(),
+        decode(&[100], DataType::U16, ByteOrder::BigEndian, 0.1, 5.0)
+            .unwrap()
+            .1,
         15.0
     );
 }
@@ -132,7 +150,9 @@ fn test_u16_scale_offset() {
 #[test]
 fn test_i16_positive() {
     assert_eq!(
-        decode(&[100], DataType::I16, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[100], DataType::I16, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         100.0
     );
 }
@@ -140,7 +160,9 @@ fn test_i16_positive() {
 #[test]
 fn test_i16_negative() {
     assert_eq!(
-        decode(&[65535], DataType::I16, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[65535], DataType::I16, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -1.0
     );
 }
@@ -148,7 +170,9 @@ fn test_i16_negative() {
 #[test]
 fn test_i16_min() {
     assert_eq!(
-        decode(&[32768], DataType::I16, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&[32768], DataType::I16, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -32768.0
     );
 }
@@ -158,7 +182,9 @@ fn test_i16_min() {
 fn test_u32_be() {
     let regs = u32_to_regs_be(123456);
     assert_eq!(
-        decode(&regs, DataType::U32, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U32, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         123456.0
     );
 }
@@ -167,7 +193,9 @@ fn test_u32_be() {
 fn test_u32_le() {
     let regs = u32_to_regs_le(123456);
     assert_eq!(
-        decode(&regs, DataType::U32, ByteOrder::LittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U32, ByteOrder::LittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         123456.0
     );
 }
@@ -176,7 +204,9 @@ fn test_u32_le() {
 fn test_u32_mbe() {
     let regs = u32_to_regs_mbe(123456);
     assert_eq!(
-        decode(&regs, DataType::U32, ByteOrder::MidBigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U32, ByteOrder::MidBigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         123456.0
     );
 }
@@ -185,7 +215,9 @@ fn test_u32_mbe() {
 fn test_u32_mle() {
     let regs = u32_to_regs_mle(123456);
     assert_eq!(
-        decode(&regs, DataType::U32, ByteOrder::MidLittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U32, ByteOrder::MidLittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         123456.0
     );
 }
@@ -194,7 +226,9 @@ fn test_u32_mle() {
 fn test_u32_max() {
     let regs = u32_to_regs_be(u32::MAX);
     assert_eq!(
-        decode(&regs, DataType::U32, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U32, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         u32::MAX as f64
     );
 }
@@ -204,7 +238,9 @@ fn test_u32_max() {
 fn test_i32_be_pos() {
     let regs = u32_to_regs_be(123456_u32);
     assert_eq!(
-        decode(&regs, DataType::I32, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I32, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         123456.0
     );
 }
@@ -213,7 +249,9 @@ fn test_i32_be_pos() {
 fn test_i32_be_neg() {
     let regs = u32_to_regs_be((-123456_i32) as u32);
     assert_eq!(
-        decode(&regs, DataType::I32, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I32, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -123456.0
     );
 }
@@ -222,7 +260,9 @@ fn test_i32_be_neg() {
 fn test_i32_le() {
     let regs = u32_to_regs_le((-99999_i32) as u32);
     assert_eq!(
-        decode(&regs, DataType::I32, ByteOrder::LittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I32, ByteOrder::LittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -99999.0
     );
 }
@@ -231,7 +271,9 @@ fn test_i32_le() {
 fn test_i32_mbe() {
     let regs = u32_to_regs_mbe((-99999_i32) as u32);
     assert_eq!(
-        decode(&regs, DataType::I32, ByteOrder::MidBigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I32, ByteOrder::MidBigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -99999.0
     );
 }
@@ -240,7 +282,9 @@ fn test_i32_mbe() {
 fn test_i32_mle() {
     let regs = u32_to_regs_mle((-99999_i32) as u32);
     assert_eq!(
-        decode(&regs, DataType::I32, ByteOrder::MidLittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I32, ByteOrder::MidLittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -99999.0
     );
 }
@@ -249,28 +293,36 @@ fn test_i32_mle() {
 #[test]
 fn test_f32_be() {
     let regs = u32_to_regs_be(3.14_f32.to_bits());
-    let r = decode(&regs, DataType::F32, ByteOrder::BigEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F32, ByteOrder::BigEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - 3.14).abs() < 1e-5);
 }
 
 #[test]
 fn test_f32_le() {
     let regs = u32_to_regs_le((-273.15_f32).to_bits());
-    let r = decode(&regs, DataType::F32, ByteOrder::LittleEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F32, ByteOrder::LittleEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - (-273.15)).abs() < 0.01);
 }
 
 #[test]
 fn test_f32_mbe() {
     let regs = u32_to_regs_mbe(42.5_f32.to_bits());
-    let r = decode(&regs, DataType::F32, ByteOrder::MidBigEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F32, ByteOrder::MidBigEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - 42.5).abs() < 1e-5);
 }
 
 #[test]
 fn test_f32_mle() {
     let regs = u32_to_regs_mle(42.5_f32.to_bits());
-    let r = decode(&regs, DataType::F32, ByteOrder::MidLittleEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F32, ByteOrder::MidLittleEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - 42.5).abs() < 1e-5);
 }
 
@@ -279,13 +331,16 @@ fn test_f32_nan() {
     let regs = u32_to_regs_be(f32::NAN.to_bits());
     assert!(decode(&regs, DataType::F32, ByteOrder::BigEndian, 1.0, 0.0)
         .unwrap()
+        .1
         .is_nan());
 }
 
 #[test]
 fn test_f32_inf() {
     let regs = u32_to_regs_be(f32::INFINITY.to_bits());
-    let r = decode(&regs, DataType::F32, ByteOrder::BigEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F32, ByteOrder::BigEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!(r.is_infinite() && r > 0.0);
 }
 
@@ -294,7 +349,9 @@ fn test_f32_inf() {
 fn test_u64_be() {
     let regs = u64_to_regs_be(1_000_000_000);
     assert_eq!(
-        decode(&regs, DataType::U64, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U64, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         1e9
     );
 }
@@ -303,7 +360,9 @@ fn test_u64_be() {
 fn test_u64_le() {
     let regs = u64_to_regs_le(1_000_000_000);
     assert_eq!(
-        decode(&regs, DataType::U64, ByteOrder::LittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U64, ByteOrder::LittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         1e9
     );
 }
@@ -312,7 +371,9 @@ fn test_u64_le() {
 fn test_u64_mbe() {
     let regs = u64_to_regs_mbe(1_000_000_000);
     assert_eq!(
-        decode(&regs, DataType::U64, ByteOrder::MidBigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U64, ByteOrder::MidBigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         1e9
     );
 }
@@ -321,7 +382,9 @@ fn test_u64_mbe() {
 fn test_u64_mle() {
     let regs = u64_to_regs_mle(1_000_000_000);
     assert_eq!(
-        decode(&regs, DataType::U64, ByteOrder::MidLittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::U64, ByteOrder::MidLittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         1e9
     );
 }
@@ -331,7 +394,9 @@ fn test_u64_mle() {
 fn test_i64_be() {
     let regs = u64_to_regs_be((-1_000_000_000_i64) as u64);
     assert_eq!(
-        decode(&regs, DataType::I64, ByteOrder::BigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I64, ByteOrder::BigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -1e9
     );
 }
@@ -340,7 +405,9 @@ fn test_i64_be() {
 fn test_i64_le() {
     let regs = u64_to_regs_le((-1_000_000_000_i64) as u64);
     assert_eq!(
-        decode(&regs, DataType::I64, ByteOrder::LittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I64, ByteOrder::LittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -1e9
     );
 }
@@ -349,7 +416,9 @@ fn test_i64_le() {
 fn test_i64_mbe() {
     let regs = u64_to_regs_mbe((-1_000_000_000_i64) as u64);
     assert_eq!(
-        decode(&regs, DataType::I64, ByteOrder::MidBigEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I64, ByteOrder::MidBigEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -1e9
     );
 }
@@ -358,7 +427,9 @@ fn test_i64_mbe() {
 fn test_i64_mle() {
     let regs = u64_to_regs_mle((-1_000_000_000_i64) as u64);
     assert_eq!(
-        decode(&regs, DataType::I64, ByteOrder::MidLittleEndian, 1.0, 0.0).unwrap(),
+        decode(&regs, DataType::I64, ByteOrder::MidLittleEndian, 1.0, 0.0)
+            .unwrap()
+            .1,
         -1e9
     );
 }
@@ -367,28 +438,36 @@ fn test_i64_mle() {
 #[test]
 fn test_f64_be() {
     let regs = u64_to_regs_be(std::f64::consts::PI.to_bits());
-    let r = decode(&regs, DataType::F64, ByteOrder::BigEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F64, ByteOrder::BigEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - std::f64::consts::PI).abs() < 1e-15);
 }
 
 #[test]
 fn test_f64_le() {
     let regs = u64_to_regs_le((-273.15_f64).to_bits());
-    let r = decode(&regs, DataType::F64, ByteOrder::LittleEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F64, ByteOrder::LittleEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - (-273.15)).abs() < 1e-10);
 }
 
 #[test]
 fn test_f64_mbe() {
     let regs = u64_to_regs_mbe(99999.99_f64.to_bits());
-    let r = decode(&regs, DataType::F64, ByteOrder::MidBigEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F64, ByteOrder::MidBigEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - 99999.99).abs() < 1e-10);
 }
 
 #[test]
 fn test_f64_mle() {
     let regs = u64_to_regs_mle(99999.99_f64.to_bits());
-    let r = decode(&regs, DataType::F64, ByteOrder::MidLittleEndian, 1.0, 0.0).unwrap();
+    let r = decode(&regs, DataType::F64, ByteOrder::MidLittleEndian, 1.0, 0.0)
+        .unwrap()
+        .1;
     assert!((r - 99999.99).abs() < 1e-10);
 }
 
@@ -397,6 +476,7 @@ fn test_f64_nan() {
     let regs = u64_to_regs_be(f64::NAN.to_bits());
     assert!(decode(&regs, DataType::F64, ByteOrder::BigEndian, 1.0, 0.0)
         .unwrap()
+        .1
         .is_nan());
 }
 
@@ -404,7 +484,9 @@ fn test_f64_nan() {
 #[test]
 fn test_scale_only() {
     assert_eq!(
-        decode(&[500], DataType::U16, ByteOrder::BigEndian, 0.01, 0.0).unwrap(),
+        decode(&[500], DataType::U16, ByteOrder::BigEndian, 0.01, 0.0)
+            .unwrap()
+            .1,
         5.0
     );
 }
@@ -412,7 +494,9 @@ fn test_scale_only() {
 #[test]
 fn test_offset_only() {
     assert_eq!(
-        decode(&[100], DataType::U16, ByteOrder::BigEndian, 1.0, -50.0).unwrap(),
+        decode(&[100], DataType::U16, ByteOrder::BigEndian, 1.0, -50.0)
+            .unwrap()
+            .1,
         50.0
     );
 }
@@ -420,7 +504,9 @@ fn test_offset_only() {
 #[test]
 fn test_scale_and_offset() {
     assert_eq!(
-        decode(&[200], DataType::U16, ByteOrder::BigEndian, 0.1, 10.0).unwrap(),
+        decode(&[200], DataType::U16, ByteOrder::BigEndian, 0.1, 10.0)
+            .unwrap()
+            .1,
         30.0
     );
 }
@@ -469,7 +555,8 @@ fn test_extra_regs_ignored() {
             1.0,
             0.0
         )
-        .unwrap(),
+        .unwrap()
+        .1,
         42.0
     );
 }

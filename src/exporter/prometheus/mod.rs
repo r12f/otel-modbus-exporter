@@ -190,7 +190,7 @@ impl super::MetricExporter for PrometheusMetricExporter {
     async fn export(
         &mut self,
         metrics: &[MetricConfig],
-        results: &std::collections::HashMap<String, anyhow::Result<f64>>,
+        results: &std::collections::HashMap<String, anyhow::Result<(f64, f64)>>,
     ) -> anyhow::Result<()> {
         let values = super::results_to_metric_values(metrics, results);
 

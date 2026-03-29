@@ -21,7 +21,7 @@ pub trait MetricExporter: Send {
     async fn export(
         &mut self,
         metrics: &[MetricConfig],
-        results: &HashMap<String, Result<f64>>,
+        results: &HashMap<String, Result<(f64, f64)>>,
     ) -> Result<()>;
 
     /// Graceful shutdown.
@@ -33,14 +33,14 @@ pub trait MetricExporter: Send {
 /// Shared by all exporters — skips metrics without a successful result.
 pub fn results_to_metric_values(
     metrics: &[MetricConfig],
-    results: &HashMap<String, Result<f64>>,
+    results: &HashMap<String, Result<(f64, f64)>>,
 ) -> Vec<MetricValue> {
     let now = SystemTime::now();
     metrics
         .iter()
         .filter_map(|cfg| {
             let value = match results.get(&cfg.name) {
-                Some(Ok(v)) => *v,
+                Some(Ok((_raw, scaled))) => *scaled,
                 _ => return None,
             };
             Some(MetricValue {

@@ -70,7 +70,7 @@ async fn test_read_u8() {
 
     let metric = make_metric("temp", 0xFA, DataType::U8);
     let bus_lock = make_bus_lock();
-    let val = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, val) = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((val - 42.0).abs() < f64::EPSILON);
 }
 
@@ -88,7 +88,7 @@ async fn test_read_u16_big_endian() {
 
     let metric = make_metric("temp", 0xFA, DataType::U16);
     let bus_lock = make_bus_lock();
-    let val = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, val) = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((val - 256.0).abs() < f64::EPSILON);
 }
 
@@ -106,7 +106,7 @@ async fn test_read_bool() {
 
     let metric = make_metric("flag", 0x10, DataType::Bool);
     let bus_lock = make_bus_lock();
-    let val = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, val) = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((val - 1.0).abs() < f64::EPSILON);
 }
 
@@ -127,7 +127,7 @@ async fn test_read_with_scale_offset() {
     metric.offset = -40.0;
 
     let bus_lock = make_bus_lock();
-    let val = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, val) = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
     // 100 * 0.01 + (-40.0) = -39.0
     assert!((val - (-39.0)).abs() < f64::EPSILON);
 }
@@ -177,6 +177,6 @@ async fn test_read_f32() {
 
     let metric = make_metric("pressure", 0x20, DataType::F32);
     let bus_lock = make_bus_lock();
-    let result = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, result) = read_i2c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((result - 3.14_f64).abs() < 0.001);
 }

@@ -555,7 +555,7 @@ impl super::MetricExporter for OtlpMetricExporter {
     async fn export(
         &mut self,
         metrics: &[MetricConfig],
-        results: &HashMap<String, Result<f64>>,
+        results: &HashMap<String, Result<(f64, f64)>>,
     ) -> Result<()> {
         let metric_values = super::results_to_metric_values(metrics, results);
 

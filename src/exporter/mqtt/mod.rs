@@ -292,7 +292,7 @@ impl super::MetricExporter for MqttMetricExporter {
     async fn export(
         &mut self,
         metrics: &[MetricConfig],
-        results: &std::collections::HashMap<String, anyhow::Result<f64>>,
+        results: &std::collections::HashMap<String, anyhow::Result<(f64, f64)>>,
     ) -> anyhow::Result<()> {
         self.ensure_connected().await?;
         let qos = qos_from_u8(self.config.qos);
@@ -301,7 +301,7 @@ impl super::MetricExporter for MqttMetricExporter {
 
         for cfg in metrics {
             let value = match results.get(&cfg.name) {
-                Some(Ok(v)) => *v,
+                Some(Ok((_raw, scaled))) => *scaled,
                 _ => continue,
             };
             let topic = build_topic(&prefix, "collector", &cfg.name);

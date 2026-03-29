@@ -260,11 +260,11 @@ async fn test_batch_read_values_match_individual() {
     for (i, (_, result)) in batch_results.iter().enumerate() {
         let batch_val = result.as_ref().unwrap();
         assert!(
-            (*batch_val - individual_results[i]).abs() < f64::EPSILON,
+            (batch_val.1 - individual_results[i].1).abs() < f64::EPSILON,
             "metric {} mismatch: batch={} individual={}",
             metrics[i].name,
-            batch_val,
-            individual_results[i]
+            batch_val.1,
+            individual_results[i].1
         );
     }
 }
@@ -286,9 +286,9 @@ async fn test_batch_read_coalesces_adjacent() {
     // Should have been only 1 holding read call
     assert_eq!(client.holding_read_count.load(Ordering::Relaxed), 1);
 
-    assert_eq!(*results[0].1.as_ref().unwrap(), 10.0);
-    assert_eq!(*results[1].1.as_ref().unwrap(), 20.0);
-    assert_eq!(*results[2].1.as_ref().unwrap(), 30.0);
+    assert_eq!(results[0].1.as_ref().unwrap().1, 10.0);
+    assert_eq!(results[1].1.as_ref().unwrap().1, 20.0);
+    assert_eq!(results[2].1.as_ref().unwrap().1, 30.0);
 }
 
 #[tokio::test]
@@ -307,8 +307,8 @@ async fn test_batch_read_separate_register_types() {
 
     assert_eq!(client.holding_read_count.load(Ordering::Relaxed), 1);
     assert_eq!(client.input_read_count.load(Ordering::Relaxed), 1);
-    assert_eq!(*results[0].1.as_ref().unwrap(), 100.0);
-    assert_eq!(*results[1].1.as_ref().unwrap(), 200.0);
+    assert_eq!(results[0].1.as_ref().unwrap().1, 100.0);
+    assert_eq!(results[1].1.as_ref().unwrap().1, 200.0);
 }
 
 #[tokio::test]
@@ -325,8 +325,8 @@ async fn test_batch_read_non_adjacent_separate_calls() {
     let results = batch_result.results;
 
     assert_eq!(client.holding_read_count.load(Ordering::Relaxed), 2);
-    assert_eq!(*results[0].1.as_ref().unwrap(), 10.0);
-    assert_eq!(*results[1].1.as_ref().unwrap(), 500.0);
+    assert_eq!(results[0].1.as_ref().unwrap().1, 10.0);
+    assert_eq!(results[1].1.as_ref().unwrap().1, 500.0);
 }
 
 /// Mock that fails batch reads to test fallback.
@@ -391,8 +391,8 @@ async fn test_batch_read_fallback_on_failure() {
 
     // First call (batch) fails, then 2 individual calls succeed
     assert_eq!(client.holding_call_count.load(Ordering::Relaxed), 3);
-    assert_eq!(*results[0].1.as_ref().unwrap(), 42.0);
-    assert_eq!(*results[1].1.as_ref().unwrap(), 42.0);
+    assert_eq!(results[0].1.as_ref().unwrap().1, 42.0);
+    assert_eq!(results[1].1.as_ref().unwrap().1, 42.0);
 }
 
 #[test]
@@ -448,5 +448,5 @@ async fn test_batch_read_125_limit_produces_multiple_reads() {
         "should issue 2 reads when range exceeds 125 registers"
     );
     assert_eq!(result.read_count, 2);
-    assert_eq!(*result.results[0].1.as_ref().unwrap(), 10.0);
+    assert_eq!(result.results[0].1.as_ref().unwrap().1, 10.0);
 }

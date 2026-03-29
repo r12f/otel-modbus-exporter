@@ -2,9 +2,11 @@
 mod collector;
 mod config;
 mod exporter;
+mod install;
 mod internal_metrics;
 mod logging;
 mod metrics;
+mod pull;
 mod reader;
 
 use std::collections::BTreeMap;
@@ -16,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use collector::{CollectorEngine, DEFAULT_SHUTDOWN_TIMEOUT};
-use config::{find_config_file, Cli, Config};
+use config::{find_config_file, Cli, Command, Config};
 use internal_metrics::InternalMetrics;
 use logging::{init_logging, LogOutput, LoggingConfig};
 use metrics::MetricStore;
@@ -76,7 +78,55 @@ async fn main() -> Result<()> {
     // 1. Parse CLI
     let cli = Cli::parse();
 
-    // 2. Find and load config
+    match cli.command {
+        Some(Command::Install {
+            user,
+            config,
+            bin,
+            uninstall,
+        }) => {
+            return install::run_install(user, config, bin, uninstall);
+        }
+        Some(Command::Pull { collector, metric }) => {
+            let config_path = find_config_file(cli.config.as_deref())
+                .context("failed to find configuration file");
+            let config_path = match config_path {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Fatal: {e:#}");
+                    std::process::exit(2);
+                }
+            };
+            let config = match Config::load_for_pull(&config_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Fatal: failed to load configuration: {e:#}");
+                    std::process::exit(2);
+                }
+            };
+            let logging_cfg = map_logging_config(&config.logging);
+            // For pull, force stderr output
+            let pull_logging = LoggingConfig {
+                level: logging_cfg.level,
+                output: LogOutput::Stderr,
+            };
+            init_logging(&pull_logging).context("failed to initialize logging")?;
+
+            let exit_code =
+                match pull::run_pull(&config, collector.as_deref(), metric.as_deref()).await {
+                    Ok(code) => code,
+                    Err(e) => {
+                        eprintln!("Fatal: {e:#}");
+                        std::process::exit(2);
+                    }
+                };
+            std::process::exit(exit_code);
+        }
+        Some(Command::Run) | None => run_daemon(cli).await,
+    }
+}
+
+async fn run_daemon(cli: Cli) -> Result<()> {
     let config_path =
         find_config_file(cli.config.as_deref()).context("failed to find configuration file")?;
     let config = Config::load(&config_path).context("failed to load configuration")?;

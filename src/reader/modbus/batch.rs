@@ -72,7 +72,11 @@ fn coalesce<'a>(items: Vec<IndexedMetric<'a>>) -> Vec<MergedRange<'a>> {
 }
 
 /// Extract a single metric's value from a register buffer read starting at `range_start`.
-fn decode_metric(metric: &config::MetricConfig, regs: &[u16], range_start: u16) -> Result<f64> {
+fn decode_metric(
+    metric: &config::MetricConfig,
+    regs: &[u16],
+    range_start: u16,
+) -> Result<(f64, f64)> {
     let addr = metric
         .address
         .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
@@ -107,7 +111,10 @@ fn decode_metric(metric: &config::MetricConfig, regs: &[u16], range_start: u16) 
 }
 
 /// Read a single metric individually (fallback path).
-async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfig) -> Result<f64> {
+async fn read_single(
+    reader: &mut dyn ModbusReader,
+    metric: &config::MetricConfig,
+) -> Result<(f64, f64)> {
     let addr = metric
         .address
         .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
@@ -133,7 +140,8 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfi
                 .first()
                 .ok_or_else(|| anyhow::anyhow!("empty coil response"))?;
             let raw = if *val { 1.0 } else { 0.0 };
-            Ok(raw * metric.scale + metric.offset)
+            let scaled = raw * metric.scale + metric.offset;
+            Ok((raw, scaled))
         }
         RegisterType::Discrete => {
             let bits = reader.read_discrete_inputs(addr, 1).await?;
@@ -141,7 +149,8 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfi
                 .first()
                 .ok_or_else(|| anyhow::anyhow!("empty discrete input response"))?;
             let raw = if *val { 1.0 } else { 0.0 };
-            Ok(raw * metric.scale + metric.offset)
+            let scaled = raw * metric.scale + metric.offset;
+            Ok((raw, scaled))
         }
     }
 }
@@ -153,7 +162,7 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfi
 /// On any batch failure, falls back to individual reads for that range.
 /// Result of a batch read, including the number of Modbus read calls issued.
 pub struct BatchReadResult<'a> {
-    pub results: Vec<(&'a config::MetricConfig, Result<f64>)>,
+    pub results: Vec<(&'a config::MetricConfig, Result<(f64, f64)>)>,
     /// Number of Modbus read calls actually issued (coalesced ranges + individual fallbacks).
     pub read_count: usize,
 }
@@ -162,7 +171,7 @@ pub async fn batch_read_coalesced<'a>(
     reader: &mut dyn ModbusReader,
     metrics: &'a [config::MetricConfig],
 ) -> BatchReadResult<'a> {
-    let mut results: Vec<Option<Result<f64>>> = (0..metrics.len()).map(|_| None).collect();
+    let mut results: Vec<Option<Result<(f64, f64)>>> = (0..metrics.len()).map(|_| None).collect();
     let mut read_count: usize = 0;
 
     // Separate register-based metrics (holding/input) from bit-based (coil/discrete).

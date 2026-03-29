@@ -25,7 +25,8 @@ pub fn warn_duplicate_metric_names(metrics: &[MetricConfig]) {
 /// Result of a [`MetricReader::read`] call, including I/O request count.
 pub struct ReadResults {
     /// Per-metric results keyed by metric name.
-    pub metrics: HashMap<String, Result<f64>>,
+    /// Per-metric results: `(raw_value, scaled_value)`.
+    pub metrics: HashMap<String, Result<(f64, f64)>>,
     /// Number of actual I/O operations performed (e.g. coalesced Modbus reads).
     /// Non-Modbus readers return `metrics.len()` (one I/O per metric).
     pub io_count: usize,

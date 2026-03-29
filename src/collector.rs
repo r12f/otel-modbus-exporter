@@ -116,12 +116,12 @@ async fn run_collector(
             };
 
             match result {
-                Ok(value) => {
+                Ok((_raw, scaled)) => {
                     local_cache.insert(
                         metric_name,
                         MetricValue {
                             name: metric_cfg.name.clone(),
-                            value,
+                            value: scaled,
                             metric_type: map_metric_type(metric_cfg.metric_type),
                             labels: BTreeMap::new(),
                             description: metric_cfg.description.clone(),

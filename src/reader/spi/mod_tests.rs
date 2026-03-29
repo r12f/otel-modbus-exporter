@@ -68,7 +68,7 @@ async fn test_read_u8() {
 
     let metric = make_spi_metric("val", vec![0x01], None, 0, DataType::U8);
     let lock = make_device_lock();
-    let val = read_spi_metric(&client, &metric, &lock).await.unwrap();
+    let (_raw, val) = read_spi_metric(&client, &metric, &lock).await.unwrap();
     assert!((val - 42.0).abs() < f64::EPSILON);
 }
 
@@ -86,7 +86,7 @@ async fn test_read_u16_with_offset() {
 
     let metric = make_spi_metric("adc", vec![0x06, 0x00, 0x00], Some(3), 1, DataType::U16);
     let lock = make_device_lock();
-    let val = read_spi_metric(&client, &metric, &lock).await.unwrap();
+    let (_raw, val) = read_spi_metric(&client, &metric, &lock).await.unwrap();
     assert!((val - 256.0).abs() < f64::EPSILON);
 }
 
@@ -106,7 +106,7 @@ async fn test_read_with_scale_offset() {
     metric.offset = -40.0;
 
     let lock = make_device_lock();
-    let val = read_spi_metric(&client, &metric, &lock).await.unwrap();
+    let (_raw, val) = read_spi_metric(&client, &metric, &lock).await.unwrap();
     // bytes[1..3] = [0x00, 0x64] = 100 big-endian u16
     // 100 * 0.01 + (-40.0) = -39.0
     assert!((val - (-39.0)).abs() < f64::EPSILON);
@@ -143,7 +143,7 @@ async fn test_read_f32() {
         DataType::F32,
     );
     let lock = make_device_lock();
-    let result = read_spi_metric(&client, &metric, &lock).await.unwrap();
+    let (_raw, result) = read_spi_metric(&client, &metric, &lock).await.unwrap();
     assert!((result - 3.14_f64).abs() < 0.001);
 }
 
@@ -161,6 +161,6 @@ async fn test_zero_pad_tx_buffer() {
 
     let metric = make_spi_metric("adc", vec![0x06], Some(3), 1, DataType::U16);
     let lock = make_device_lock();
-    let val = read_spi_metric(&client, &metric, &lock).await.unwrap();
+    let (_raw, val) = read_spi_metric(&client, &metric, &lock).await.unwrap();
     assert!((val - 256.0).abs() < f64::EPSILON);
 }

@@ -435,7 +435,7 @@ async fn test_read_i3c_metric_u8() {
     let bus_lock = Arc::new(std::sync::Mutex::new(()));
     let metric = make_metric("temp", 0xFA, DataType::U8, ByteOrder::BigEndian);
 
-    let value = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, value) = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((value - 66.0).abs() < f64::EPSILON); // 0x42 = 66
 }
 
@@ -451,7 +451,7 @@ async fn test_read_i3c_metric_u16_big_endian() {
     let bus_lock = Arc::new(std::sync::Mutex::new(()));
     let metric = make_metric("temp", 0xFA, DataType::U16, ByteOrder::BigEndian);
 
-    let value = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, value) = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((value - 256.0).abs() < f64::EPSILON);
 }
 
@@ -467,7 +467,7 @@ async fn test_read_i3c_metric_u16_little_endian() {
     let bus_lock = Arc::new(std::sync::Mutex::new(()));
     let metric = make_metric("temp", 0xFA, DataType::U16, ByteOrder::LittleEndian);
 
-    let value = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, value) = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((value - 256.0).abs() < f64::EPSILON);
 }
 
@@ -484,7 +484,7 @@ async fn test_read_i3c_metric_f32_big_endian() {
     let bus_lock = Arc::new(std::sync::Mutex::new(()));
     let metric = make_metric("temp", 0xFA, DataType::F32, ByteOrder::BigEndian);
 
-    let value = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, value) = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
     assert!((value - 42.0).abs() < 0.001);
 }
 
@@ -502,7 +502,7 @@ async fn test_read_i3c_metric_with_scale_offset() {
     metric.scale = 0.1;
     metric.offset = -40.0;
 
-    let value = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
+    let (_raw, value) = read_i3c_metric(&client, &metric, &bus_lock).await.unwrap();
     // 245 * 0.1 + (-40.0) = -15.5
     assert!((value - (-15.5)).abs() < 0.001);
 }
