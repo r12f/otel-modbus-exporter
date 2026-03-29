@@ -158,6 +158,11 @@ pub enum ConnectionParams {
         bps: u32,
         slave_id: u8,
     },
+    #[allow(dead_code)]
+    I2c {
+        bus: String,
+        address: u8,
+    },
 }
 
 /// Generate a bus-exporter YAML config and write it to `dir/config.yaml`.
@@ -174,7 +179,7 @@ pub fn generate_config(
                 "    protocol:\n      type: modbus-tcp\n      endpoint: \"{}\"",
                 endpoint
             ),
-            *slave_id,
+            Some(*slave_id),
         ),
         ConnectionParams::ModbusRtu {
             device,
@@ -185,18 +190,35 @@ pub fn generate_config(
                 "    protocol:\n      type: modbus-rtu\n      device: \"{}\"\n      bps: {}",
                 device, bps
             ),
-            *slave_id,
+            Some(*slave_id),
+        ),
+        ConnectionParams::I2c { bus, address } => (
+            format!(
+                "    protocol:\n      type: i2c\n      bus: \"{}\"\n      address: {}",
+                bus, address
+            ),
+            None, // slave_id is a Modbus-only concept, omit for I2C
         ),
     };
 
     let mut metrics_yaml = String::new();
     for m in &fixtures.metrics {
+        let register_type_line = if m.register_type.is_empty() {
+            String::new()
+        } else {
+            format!("        register_type: {}\n", m.register_type)
+        };
         metrics_yaml.push_str(&format!(
-            "      - name: {}\n        description: \"{}\"\n        type: {}\n        register_type: {}\n        address: {}\n        data_type: {}\n        byte_order: {}\n        scale: {}\n        offset: {}\n        unit: \"{}\"\n",
-            m.name, m.description, m.metric_type, m.register_type, m.address,
+            "      - name: {}\n        description: \"{}\"\n        type: {}\n{}        address: {}\n        data_type: {}\n        byte_order: {}\n        scale: {}\n        offset: {}\n        unit: \"{}\"\n",
+            m.name, m.description, m.metric_type, register_type_line, m.address,
             m.data_type, m.byte_order, m.scale, m.offset, m.unit,
         ));
     }
+
+    let slave_id_line = match slave_id {
+        Some(id) => format!("    slave_id: {}\n", id),
+        None => String::new(),
+    };
 
     let config = format!(
         r#"exporters:
@@ -210,12 +232,11 @@ pub fn generate_config(
 collectors:
   - name: {}
 {}
-    slave_id: {}
-    polling_interval: "1s"
+{}    polling_interval: "1s"
     metrics:
 {}
 "#,
-        collector_name, protocol_yaml, slave_id, metrics_yaml,
+        collector_name, protocol_yaml, slave_id_line, metrics_yaml,
     );
 
     let config_path = dir.join("config.yaml");
