@@ -415,6 +415,7 @@ pub async fn read_i3c_metric(
     .context("spawn_blocking join error")??;
 
     decoder::decode_bytes(&bytes, data_type, byte_order, scale, offset)
+        .map(|(_raw, scaled)| scaled)
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 

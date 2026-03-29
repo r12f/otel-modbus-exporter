@@ -69,7 +69,7 @@ pub fn decode_bytes(
     byte_order: ByteOrder,
     scale: f64,
     offset: f64,
-) -> Result<f64, DecodeError> {
+) -> Result<(f64, f64), DecodeError> {
     let needed = byte_count(data_type);
     if bytes.len() < needed {
         return Err(DecodeError::InsufficientRegisters {
@@ -180,7 +180,7 @@ pub fn decode_bytes(
         }
     };
 
-    Ok(raw * scale + offset)
+    Ok((raw, raw * scale + offset))
 }
 
 fn reorder_32(regs: &[u16], byte_order: ByteOrder) -> [u8; 4] {
@@ -214,7 +214,7 @@ pub fn decode(
     byte_order: ByteOrder,
     scale: f64,
     offset: f64,
-) -> Result<f64, DecodeError> {
+) -> Result<(f64, f64), DecodeError> {
     let needed = registers_needed(data_type);
     if registers.len() < needed {
         return Err(DecodeError::InsufficientRegisters {
@@ -260,7 +260,7 @@ pub fn decode(
         }
     };
 
-    Ok(raw * scale + offset)
+    Ok((raw, raw * scale + offset))
 }
 
 #[cfg(test)]

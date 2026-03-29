@@ -183,6 +183,7 @@ pub async fn read_spi_metric(
     let payload = &bytes[response_offset..response_offset + num_bytes];
 
     decoder::decode_bytes(payload, data_type, byte_order, scale, offset)
+        .map(|(_raw, scaled)| scaled)
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 

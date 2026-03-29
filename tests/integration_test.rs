@@ -120,7 +120,8 @@ fn decoder_u16_roundtrip() {
         1.0,
         0.0,
     )
-    .unwrap();
+    .unwrap()
+    .1;
     assert!((result - 12345.0).abs() < f64::EPSILON);
 }
 
@@ -135,7 +136,8 @@ fn decoder_i16_negative() {
         1.0,
         0.0,
     )
-    .unwrap();
+    .unwrap()
+    .1;
     assert!((result - (-100.0)).abs() < f64::EPSILON);
 }
 
@@ -153,7 +155,8 @@ fn decoder_f32_big_endian() {
         1.0,
         0.0,
     )
-    .unwrap();
+    .unwrap()
+    .1;
     assert!((result - 3.14_f64).abs() < 0.001);
 }
 
@@ -167,7 +170,8 @@ fn decoder_with_scale_and_offset() {
         0.1,
         -10.0,
     )
-    .unwrap();
+    .unwrap()
+    .1;
     // 100 * 0.1 + (-10.0) = 0.0
     assert!((result - 0.0).abs() < f64::EPSILON);
 }

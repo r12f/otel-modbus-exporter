@@ -115,6 +115,7 @@ pub(crate) async fn read_modbus_metric(
                 metric.scale,
                 metric.offset,
             )
+            .map(|(_raw, scaled)| scaled)
             .map_err(|e| anyhow::anyhow!("{e}"))
         }
         RegisterType::Input => {
@@ -129,6 +130,7 @@ pub(crate) async fn read_modbus_metric(
                 metric.scale,
                 metric.offset,
             )
+            .map(|(_raw, scaled)| scaled)
             .map_err(|e| anyhow::anyhow!("{e}"))
         }
         RegisterType::Coil => {

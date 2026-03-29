@@ -103,6 +103,7 @@ fn decode_metric(metric: &config::MetricConfig, regs: &[u16], range_start: u16) 
     let data_type = decoder::map_data_type(metric.data_type);
     let byte_order = decoder::map_byte_order(metric.byte_order);
     decoder::decode(slice, data_type, byte_order, metric.scale, metric.offset)
+        .map(|(_raw, scaled)| scaled)
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
@@ -120,11 +121,13 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfi
         RegisterType::Holding => {
             let regs = reader.read_holding_registers(addr, count).await?;
             decoder::decode(&regs, data_type, byte_order, metric.scale, metric.offset)
+                .map(|(_raw, scaled)| scaled)
                 .map_err(|e| anyhow::anyhow!("{e}"))
         }
         RegisterType::Input => {
             let regs = reader.read_input_registers(addr, count).await?;
             decoder::decode(&regs, data_type, byte_order, metric.scale, metric.offset)
+                .map(|(_raw, scaled)| scaled)
                 .map_err(|e| anyhow::anyhow!("{e}"))
         }
         RegisterType::Coil => {

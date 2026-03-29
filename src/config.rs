@@ -9,11 +9,44 @@ use std::time::Duration;
 use tracing::info;
 
 #[derive(Parser, Debug)]
-#[command(name = "bus-exporter")]
+#[command(name = "bus-exporter", version, about)]
 pub struct Cli {
     /// Path to the configuration file
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     pub config: Option<PathBuf>,
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum Command {
+    /// Start as daemon (default when no subcommand is given)
+    Run,
+    /// Single-shot metric read — connect, read once, print JSON, exit
+    Pull {
+        /// Filter collectors by name (regex, partial match)
+        #[arg(long)]
+        collector: Option<String>,
+        /// Filter metrics by name (regex, partial match)
+        #[arg(long)]
+        metric: Option<String>,
+    },
+    /// Install/uninstall as a systemd service
+    Install {
+        /// Install as user service (systemctl --user)
+        #[arg(long)]
+        user: bool,
+        /// Config file path to embed in service file
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Path to bus-exporter binary
+        #[arg(long)]
+        bin: Option<PathBuf>,
+        /// Remove the service instead of installing
+        #[arg(long)]
+        uninstall: bool,
+    },
 }
 
 /// Default search paths for the config file (in priority order).
@@ -628,6 +661,26 @@ impl Config {
         }
 
         config.validate()?;
+        Ok(config)
+    }
+
+    /// Load config without exporter validation (for pull command).
+    pub fn load_for_pull(path: &std::path::Path) -> Result<Self> {
+        let content =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let mut config: Config =
+            serde_yaml::from_str(&content).with_context(|| "parsing config YAML")?;
+
+        let config_dir = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+
+        for collector in &mut config.collectors {
+            collector.resolve_metrics_files(&config_dir)?;
+        }
+
+        // Skip full validation (exporters not needed for pull)
         Ok(config)
     }
 
