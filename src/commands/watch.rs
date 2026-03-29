@@ -10,8 +10,8 @@ use crate::logging::{init_logging, map_logging_config, LogOutput, LoggingConfig}
 
 use super::{collect_once, filter_collectors};
 
-/// Entry point for the `trace` subcommand.
-pub async fn trace_command(
+/// Entry point for the `watch` subcommand.
+pub async fn watch_command(
     cli_config: Option<&Path>,
     collector: Option<&str>,
     metric: Option<&str>,
@@ -33,11 +33,11 @@ pub async fn trace_command(
         }
     };
     let logging_cfg = map_logging_config(&config.logging);
-    let trace_logging = LoggingConfig {
+    let watch_logging = LoggingConfig {
         level: logging_cfg.level,
         output: LogOutput::Stderr,
     };
-    init_logging(&trace_logging).context("failed to initialize logging")?;
+    init_logging(&watch_logging).context("failed to initialize logging")?;
 
     let mut filtered_collectors = filter_collectors(&config.collectors, collector, metric)?;
     if filtered_collectors.is_empty() {
@@ -81,11 +81,11 @@ pub async fn trace_command(
         cancel_clone.cancel();
     });
 
-    let exit_code = run_trace(&filtered_collectors, loop_interval, &cancel).await;
+    let exit_code = run_watch(&filtered_collectors, loop_interval, &cancel).await;
     std::process::exit(exit_code);
 }
 
-async fn run_trace(
+async fn run_watch(
     collectors: &[CollectorConfig],
     interval: Duration,
     cancel: &CancellationToken,
@@ -134,7 +134,7 @@ async fn run_trace(
 
     // Final summary
     let summary = json!({
-        "trace_summary": {
+        "watch_summary": {
             "total_iterations": iteration,
             "total_successful": total_successful,
             "total_failed": total_failed
