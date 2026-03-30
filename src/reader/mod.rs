@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{self, MetricConfig, Protocol};
+use crate::config::{self, MetricConfig, Protocol, WriteStep};
 
 /// Check for duplicate metric names and warn about them.
 pub fn warn_duplicate_metric_names(metrics: &[MetricConfig]) {
@@ -72,6 +72,28 @@ pub trait MetricReader: Send {
 pub trait MetricReaderFactory: Send + Sync {
     fn create(&self, collector: &config::CollectorConfig) -> Result<Box<dyn MetricReader>>;
 }
+
+/// Trait for writing register values to a bus device.
+///
+/// Separate from MetricReader — write steps are used for device
+/// initialization (`init_writes`) and measurement triggering (`pre_poll`).
+#[async_trait]
+pub trait MetricWriter: Send {
+    /// Execute a sequence of write steps. Each step may write bytes and/or delay.
+    async fn execute_writes(&mut self, steps: &[WriteStep]) -> Result<()>;
+}
+
+/// Factory trait for creating metric writers from config.
+pub trait MetricWriterFactory: Send + Sync {
+    /// Create a writer for the given collector, or None if the protocol doesn't support writes.
+    fn create_writer(
+        &self,
+        collector: &config::CollectorConfig,
+    ) -> Result<Option<Box<dyn MetricWriter>>>;
+}
+
+/// Combined factory trait for creating both readers and writers.
+pub trait MetricFactory: MetricReaderFactory + MetricWriterFactory {}
 
 /// Default factory implementation that creates real readers based on protocol config.
 pub struct MetricReaderFactoryImpl;
@@ -190,3 +212,112 @@ impl MetricReaderFactory for MetricReaderFactoryImpl {
         }
     }
 }
+
+impl MetricWriterFactory for MetricReaderFactoryImpl {
+    fn create_writer(
+        &self,
+        collector: &config::CollectorConfig,
+    ) -> Result<Option<Box<dyn MetricWriter>>> {
+        // Only create writers for protocols that support write steps
+        if collector.init_writes.is_empty() && collector.pre_poll.is_empty() {
+            return Ok(None);
+        }
+        match &collector.protocol {
+            Protocol::ModbusTcp { .. } | Protocol::ModbusRtu { .. } => {
+                // Modbus doesn't support write steps (validated earlier)
+                Ok(None)
+            }
+            Protocol::I2c { bus, address } => {
+                #[cfg(target_os = "linux")]
+                let device: Box<dyn i2c::I2cDevice> = {
+                    let mut dev = i2c::linux_device::LinuxI2cDevice::new(bus.clone(), *address);
+                    dev.open().context("failed to open I2C device for writer")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let device: Box<dyn i2c::I2cDevice> = Box::new(i2c::StubI2cDevice);
+
+                let bus_lock = i2c::get_bus_lock(bus);
+                let writer = i2c::I2cMetricWriter::new(
+                    std::sync::Arc::new(std::sync::Mutex::new(device)),
+                    bus.clone(),
+                    bus_lock,
+                );
+                Ok(Some(Box::new(writer)))
+            }
+            Protocol::Spi { device, .. } => {
+                #[cfg(target_os = "linux")]
+                let spi_device: Box<dyn spi::SpiDevice> = {
+                    // Re-open the same device for writing
+                    let speed_hz = match &collector.protocol {
+                        Protocol::Spi { speed_hz, .. } => *speed_hz,
+                        _ => unreachable!(),
+                    };
+                    let mode = match &collector.protocol {
+                        Protocol::Spi { mode, .. } => *mode,
+                        _ => unreachable!(),
+                    };
+                    let bits_per_word = match &collector.protocol {
+                        Protocol::Spi { bits_per_word, .. } => *bits_per_word,
+                        _ => unreachable!(),
+                    };
+                    let mut dev = spi::linux_device::LinuxSpiDevice::new(
+                        device.clone(),
+                        speed_hz,
+                        mode,
+                        bits_per_word,
+                    );
+                    dev.open().context("failed to open SPI device for writer")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let spi_device: Box<dyn spi::SpiDevice> = Box::new(spi::StubSpiDevice);
+
+                let device_lock = spi::get_device_lock(device);
+                let writer = spi::SpiMetricWriter::new(
+                    std::sync::Arc::new(std::sync::Mutex::new(spi_device)),
+                    device.clone(),
+                    device_lock,
+                );
+                Ok(Some(Box::new(writer)))
+            }
+            Protocol::I3c {
+                bus,
+                pid,
+                address,
+                device_class,
+                instance,
+            } => {
+                let address_mode = if let Some(pid_str) = pid {
+                    i3c::AddressMode::Pid(pid_str.clone())
+                } else if let Some(addr) = address {
+                    i3c::AddressMode::Static(*addr)
+                } else {
+                    i3c::AddressMode::DeviceClass {
+                        class: device_class.clone().unwrap(),
+                        instance: instance.unwrap(),
+                    }
+                };
+
+                #[cfg(target_os = "linux")]
+                let device: Box<dyn i3c::I3cDevice> = {
+                    let mut dev = i3c::linux_device::LinuxI3cDevice::new(bus.clone());
+                    dev.open().context("failed to open I3C device for writer")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let device: Box<dyn i3c::I3cDevice> = Box::new(i3c::StubI3cDevice);
+
+                let client = i3c::I3cMetricReader::new(device, bus.clone(), address_mode);
+                let bus_lock = i3c::get_bus_lock(bus);
+                let writer = i3c::I3cMetricWriter::new(
+                    std::sync::Arc::new(tokio::sync::Mutex::new(client)),
+                    bus_lock,
+                );
+                Ok(Some(Box::new(writer)))
+            }
+        }
+    }
+}
+
+impl MetricFactory for MetricReaderFactoryImpl {}

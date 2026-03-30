@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use super::decoder;
 use crate::config;
+use crate::config::WriteStep;
 
 /// Type alias for per-device mutex (different chip-selects are independent).
 pub type DeviceLock = Arc<tokio::sync::Mutex<()>>;
@@ -128,6 +129,21 @@ impl SpiMetricReader {
         }
     }
 
+    /// Get a clone of the shared device Arc.
+    pub fn shared_device(&self) -> Arc<std::sync::Mutex<Box<dyn SpiDevice>>> {
+        Arc::clone(&self.device)
+    }
+
+    /// Get the device path.
+    pub fn device_path(&self) -> &str {
+        &self.device_path
+    }
+
+    /// Get the device lock.
+    pub fn shared_device_lock(&self) -> DeviceLock {
+        Arc::clone(&self.device_lock)
+    }
+
     /// Perform a synchronous SPI transfer.
     pub fn transfer_sync(&self, tx_buf: &[u8]) -> Result<Vec<u8>> {
         let mut dev = self
@@ -227,6 +243,56 @@ impl crate::reader::MetricReader for SpiMetricReader {
             metrics: results,
             io_count,
         }
+    }
+}
+
+/// SPI metric writer for executing write steps (init_writes / pre_poll).
+pub struct SpiMetricWriter {
+    device: Arc<std::sync::Mutex<Box<dyn SpiDevice>>>,
+    device_path: String,
+    device_lock: DeviceLock,
+}
+
+impl SpiMetricWriter {
+    pub fn new(
+        device: Arc<std::sync::Mutex<Box<dyn SpiDevice>>>,
+        device_path: String,
+        device_lock: DeviceLock,
+    ) -> Self {
+        Self {
+            device,
+            device_path,
+            device_lock,
+        }
+    }
+}
+
+#[async_trait]
+impl crate::reader::MetricWriter for SpiMetricWriter {
+    async fn execute_writes(&mut self, steps: &[WriteStep]) -> Result<()> {
+        for (idx, step) in steps.iter().enumerate() {
+            if let Some(ref command) = step.command {
+                let device = Arc::clone(&self.device);
+                let device_lock = self.device_lock.clone();
+                let device_path = self.device_path.clone();
+                let command = command.clone();
+                tokio::task::spawn_blocking(move || -> Result<()> {
+                    let _lock = device_lock.blocking_lock();
+                    let mut dev = device
+                        .lock()
+                        .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+                    dev.transfer(&command)
+                        .with_context(|| format!("SPI write step {} on {}", idx, device_path))?;
+                    Ok(())
+                })
+                .await
+                .context("spawn_blocking join error")??;
+            }
+            if let Some(delay) = step.delay {
+                tokio::time::sleep(delay).await;
+            }
+        }
+        Ok(())
     }
 }
 

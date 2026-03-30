@@ -1242,3 +1242,237 @@ collectors:
         "got: {err:?}"
     );
 }
+
+// ---- Write steps (init_writes / pre_poll) ----
+
+fn i2c_yaml_with_writes(init_writes: &str, pre_poll: &str) -> String {
+    format!(
+        r#"
+exporters:
+  prometheus:
+    enabled: true
+collectors:
+  - name: bme680
+    protocol:
+      type: i2c
+      bus: /dev/i2c-1
+      address: 0x76
+{}{}
+    metrics:
+      - name: temperature
+        type: gauge
+        address: 0x22
+        data_type: u16
+"#,
+        if init_writes.is_empty() {
+            String::new()
+        } else {
+            format!("    init_writes:\n{}", init_writes)
+        },
+        if pre_poll.is_empty() {
+            String::new()
+        } else {
+            format!("    pre_poll:\n{}", pre_poll)
+        },
+    )
+}
+
+#[test]
+fn test_i2c_init_writes_valid() {
+    let yaml = i2c_yaml_with_writes(
+        "      - address: 0x74\n        value: 0x2B\n      - address: 0x75\n        value: [0x04, 0x00]\n        delay: 100ms\n",
+        "",
+    );
+    let config = parse(&yaml).unwrap();
+    let c = &config.collectors[0];
+    assert_eq!(c.init_writes.len(), 2);
+    assert_eq!(c.init_writes[0].address, Some(0x74));
+    assert_eq!(
+        c.init_writes[0].value.as_ref().unwrap().as_bytes(),
+        vec![0x2B]
+    );
+    assert!(c.init_writes[0].delay.is_none());
+    assert_eq!(c.init_writes[1].address, Some(0x75));
+    assert_eq!(
+        c.init_writes[1].value.as_ref().unwrap().as_bytes(),
+        vec![0x04, 0x00]
+    );
+    assert_eq!(
+        c.init_writes[1].delay,
+        Some(std::time::Duration::from_millis(100))
+    );
+}
+
+#[test]
+fn test_i2c_pre_poll_valid() {
+    let yaml = i2c_yaml_with_writes(
+        "",
+        "      - address: 0x74\n        value: 0x21\n        delay: 50ms\n",
+    );
+    let config = parse(&yaml).unwrap();
+    let c = &config.collectors[0];
+    assert_eq!(c.pre_poll.len(), 1);
+}
+
+#[test]
+fn test_modbus_rejects_init_writes() {
+    let yaml = r#"
+exporters:
+  prometheus:
+    enabled: true
+collectors:
+  - name: test
+    protocol:
+      type: modbus-tcp
+      endpoint: "localhost:502"
+    slave_id: 1
+    init_writes:
+      - address: 0x74
+        value: 0x2B
+    metrics:
+      - name: voltage
+        type: gauge
+        register_type: holding
+        address: 0
+        data_type: u16
+"#;
+    let err = parse(yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("not supported for Modbus"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_i2c_write_step_address_without_value() {
+    let yaml = i2c_yaml_with_writes("      - address: 0x74\n", "");
+    let err = parse(&yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("address and value must both be specified"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_i2c_write_step_delay_exceeds_10s() {
+    let yaml = i2c_yaml_with_writes(
+        "      - address: 0x74\n        value: 0x2B\n        delay: 15s\n",
+        "",
+    );
+    let err = parse(&yaml).unwrap_err();
+    assert!(format!("{err:?}").contains("delay must be"), "got: {err:?}");
+}
+
+#[test]
+fn test_i2c_write_step_empty_multi_value() {
+    let yaml = i2c_yaml_with_writes("      - address: 0x74\n        value: []\n", "");
+    let err = parse(&yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("at least one byte"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_i2c_write_step_command_rejected() {
+    let yaml = i2c_yaml_with_writes("      - command: [0x01, 0x02]\n", "");
+    let err = parse(&yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("command field is not valid for I2C"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_spi_write_step_valid() {
+    let yaml = r#"
+exporters:
+  prometheus:
+    enabled: true
+collectors:
+  - name: spi_sensor
+    protocol:
+      type: spi
+      device: /dev/spidev0.0
+    init_writes:
+      - command: [0x01, 0x02, 0x03]
+      - command: [0xFF]
+        delay: 10ms
+    metrics:
+      - name: data
+        type: gauge
+        command: [0x00, 0x00]
+        data_type: u16
+"#;
+    let config = parse(yaml).unwrap();
+    let c = &config.collectors[0];
+    assert_eq!(c.init_writes.len(), 2);
+    assert_eq!(
+        c.init_writes[0].command.as_ref().unwrap(),
+        &vec![0x01, 0x02, 0x03]
+    );
+}
+
+#[test]
+fn test_spi_write_step_address_rejected() {
+    let yaml = r#"
+exporters:
+  prometheus:
+    enabled: true
+collectors:
+  - name: spi_sensor
+    protocol:
+      type: spi
+      device: /dev/spidev0.0
+    init_writes:
+      - address: 0x74
+        value: 0x2B
+    metrics:
+      - name: data
+        type: gauge
+        command: [0x00, 0x00]
+        data_type: u16
+"#;
+    let err = parse(yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("not valid for SPI"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_spi_write_step_empty_command() {
+    let yaml = r#"
+exporters:
+  prometheus:
+    enabled: true
+collectors:
+  - name: spi_sensor
+    protocol:
+      type: spi
+      device: /dev/spidev0.0
+    init_writes:
+      - command: []
+    metrics:
+      - name: data
+        type: gauge
+        command: [0x00, 0x00]
+        data_type: u16
+"#;
+    let err = parse(yaml).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("at least one byte"),
+        "got: {err:?}"
+    );
+}
+
+#[test]
+fn test_delay_only_step_valid() {
+    let yaml = i2c_yaml_with_writes("      - delay: 500ms\n", "");
+    let config = parse(&yaml).unwrap();
+    assert_eq!(config.collectors[0].init_writes.len(), 1);
+    assert_eq!(
+        config.collectors[0].init_writes[0].delay,
+        Some(std::time::Duration::from_millis(500))
+    );
+}

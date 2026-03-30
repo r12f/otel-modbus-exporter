@@ -2,6 +2,7 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use indexmap::IndexMap;
+use serde::de;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -279,6 +280,78 @@ fn default_mqtt_timeout() -> Duration {
     Duration::from_secs(5)
 }
 
+/// A single byte or list of bytes, used for I2C/I3C write step values.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ByteValue {
+    Single(u8),
+    Multi(Vec<u8>),
+}
+
+impl ByteValue {
+    pub fn as_bytes(&self) -> Vec<u8> {
+        match self {
+            ByteValue::Single(b) => vec![*b],
+            ByteValue::Multi(v) => v.clone(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ByteValue {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct ByteValueVisitor;
+        impl<'de> de::Visitor<'de> for ByteValueVisitor {
+            type Value = ByteValue;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a u8 integer or a list of u8 integers")
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> std::result::Result<ByteValue, E> {
+                if v > 255 {
+                    return Err(E::custom(format!("value {} exceeds u8 range", v)));
+                }
+                Ok(ByteValue::Single(v as u8))
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> std::result::Result<ByteValue, E> {
+                if !(0..=255).contains(&v) {
+                    return Err(E::custom(format!("value {} out of u8 range", v)));
+                }
+                Ok(ByteValue::Single(v as u8))
+            }
+            fn visit_seq<A: de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> std::result::Result<ByteValue, A::Error> {
+                let mut bytes = Vec::new();
+                while let Some(v) = seq.next_element::<u8>()? {
+                    bytes.push(v);
+                }
+                Ok(ByteValue::Multi(bytes))
+            }
+        }
+        deserializer.deserialize_any(ByteValueVisitor)
+    }
+}
+
+/// A write step for I2C/I3C or SPI protocols.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct WriteStep {
+    /// Register address (I2C/I3C only).
+    #[serde(default)]
+    pub address: Option<u8>,
+    /// Value byte(s) to write (I2C/I3C only).
+    #[serde(default)]
+    pub value: Option<ByteValue>,
+    /// Raw command bytes (SPI only).
+    #[serde(default)]
+    pub command: Option<Vec<u8>>,
+    /// Optional delay after this step.
+    #[serde(default, with = "humantime_serde")]
+    pub delay: Option<Duration>,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct CollectorConfig {
@@ -288,6 +361,10 @@ pub struct CollectorConfig {
     pub slave_id: Option<u8>,
     #[serde(default = "default_polling_interval", with = "humantime_serde")]
     pub polling_interval: Duration,
+    #[serde(default)]
+    pub init_writes: Vec<WriteStep>,
+    #[serde(default)]
+    pub pre_poll: Vec<WriteStep>,
     #[serde(default)]
     pub labels: HashMap<String, String>,
     #[serde(default)]
@@ -924,6 +1001,72 @@ impl Config {
             let is_spi = matches!(c.protocol, Protocol::Spi { .. });
             let is_i3c = matches!(c.protocol, Protocol::I3c { .. });
             let is_modbus = !is_i2c && !is_spi && !is_i3c;
+
+            // Validate init_writes / pre_poll
+            if is_modbus && (!c.init_writes.is_empty() || !c.pre_poll.is_empty()) {
+                bail!(
+                    "collector '{}': init_writes and pre_poll are not supported for Modbus protocols",
+                    c.name
+                );
+            }
+            let all_writes: Vec<(&str, &[WriteStep])> =
+                vec![("init_writes", &c.init_writes), ("pre_poll", &c.pre_poll)];
+            for (field_name, steps) in all_writes {
+                for (idx, step) in steps.iter().enumerate() {
+                    let step_label = format!("collector '{}', {}[{}]", c.name, field_name, idx);
+
+                    if is_spi {
+                        // SPI: must not have address/value
+                        if step.address.is_some() || step.value.is_some() {
+                            bail!("{}: address/value fields are not valid for SPI write steps (use command)", step_label);
+                        }
+                        // Must have command or delay
+                        if step.command.is_none() && step.delay.is_none() {
+                            bail!(
+                                "{}: step must have at least one of command or delay",
+                                step_label
+                            );
+                        }
+                        if let Some(ref cmd) = step.command {
+                            if cmd.is_empty() {
+                                bail!("{}: command must contain at least one byte", step_label);
+                            }
+                        }
+                    } else {
+                        // I2C / I3C: must not have command
+                        if step.command.is_some() {
+                            bail!("{}: command field is not valid for I2C/I3C write steps (use address/value)", step_label);
+                        }
+                        // address and value must appear together
+                        if step.address.is_some() != step.value.is_some() {
+                            bail!(
+                                "{}: address and value must both be specified together",
+                                step_label
+                            );
+                        }
+                        // Must have address+value or delay
+                        if step.address.is_none() && step.delay.is_none() {
+                            bail!(
+                                "{}: step must have at least one of address+value or delay",
+                                step_label
+                            );
+                        }
+                        // Value must have at least one byte
+                        if let Some(ByteValue::Multi(ref v)) = step.value {
+                            if v.is_empty() {
+                                bail!("{}: value must contain at least one byte", step_label);
+                            }
+                        }
+                    }
+                    // Delay validation: must be ≤ 10s
+                    if let Some(delay) = step.delay {
+                        if delay > Duration::from_secs(10) {
+                            bail!("{}: delay must be ≤ 10s, got {:?}", step_label, delay);
+                        }
+                    }
+                }
+            }
+
             for m in &c.metrics {
                 // Address is required for Modbus, I2C, and I3C protocols
                 if !is_spi && m.address.is_none() {

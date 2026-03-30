@@ -157,6 +157,8 @@ fn test_collector_config(name: &str) -> CollectorConfig {
         polling_interval: Duration::from_millis(100),
         labels: HashMap::new(),
         metrics_files: None,
+        init_writes: Vec::new(),
+        pre_poll: Vec::new(),
         metrics: vec![MetricConfig {
             name: "temperature".to_string(),
             description: "Temperature sensor".to_string(),
@@ -175,6 +177,8 @@ fn test_collector_config(name: &str) -> CollectorConfig {
     }
 }
 
+use crate::reader::{MetricFactory, MetricReaderFactory, MetricWriterFactory};
+
 struct MockFactory {
     clients: Mutex<Vec<Box<dyn MetricReaderTrait>>>,
 }
@@ -190,6 +194,17 @@ impl MetricReaderFactory for MockFactory {
         Ok(client)
     }
 }
+
+impl MetricWriterFactory for MockFactory {
+    fn create_writer(
+        &self,
+        _collector: &CollectorConfig,
+    ) -> anyhow::Result<Option<Box<dyn crate::reader::MetricWriter>>> {
+        Ok(None)
+    }
+}
+
+impl MetricFactory for MockFactory {}
 
 #[tokio::test]
 async fn test_collector_polls_and_publishes() {
