@@ -450,13 +450,13 @@ pub enum Protocol {
     #[serde(rename = "i3c")]
     I3c {
         bus: String,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         pid: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         address: Option<u8>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         device_class: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         instance: Option<u8>,
     },
 }

@@ -60,6 +60,12 @@ collectors:
         byte_order: big_endian
         scale: 0.1
         unit: "V"
+  - name: sensor_i3c
+    protocol:
+      type: i3c
+      bus: "/dev/i3c-0"
+    polling_interval: "10s"
+    metrics: []
 "#
 }
 
