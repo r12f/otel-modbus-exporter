@@ -31,8 +31,12 @@ This strict **producer/consumer separation** ensures:
 let cancel = CancellationToken::new();
 
 // Execute init_writes once at startup (I2C/SPI/I3C only)
-if !collector.init_writes.is_empty() {
-    client.execute_writes(&collector.init_writes).await?;
+// Writes are performed via a separate MetricWriter trait,
+// not through the MetricReader interface. The collector
+// holds both a reader and an optional writer for the same
+// bus connection. See reader.md for the trait boundary.
+if let Some(writer) = &mut writer {
+    writer.execute_writes(&collector.init_writes).await?;
 }
 
 loop {
@@ -41,8 +45,8 @@ loop {
     let mut had_error = false;
 
     // Execute pre_poll writes before each read cycle (I2C/SPI/I3C only)
-    if !collector.pre_poll.is_empty() {
-        client.execute_writes(&collector.pre_poll).await?;
+    if let Some(writer) = &mut writer {
+        writer.execute_writes(&collector.pre_poll).await?;
     }
 
     // Batch read all metrics via reader — returns ReadResults

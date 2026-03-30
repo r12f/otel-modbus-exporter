@@ -12,7 +12,7 @@ a common read interface so the collector and export pipeline are fully reusable.
 
 - **Linux only** — uses `/dev/i2c-N` device files via the `i2c-dev` kernel interface.
 - Requires the `i2c-dev` kernel module loaded (`modprobe i2c-dev`).
-- The process must have read permission on the I2C device file.
+- The process must have read/write permission on the I2C device file (write permission is required for `init_writes` and `pre_poll`).
 
 ## Crate
 

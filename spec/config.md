@@ -163,7 +163,13 @@ collectors:
 #### Validation
 
 - `init_writes` and `pre_poll` on Modbus TCP/RTU collectors → **validation error**.
-- Each step must have at least `address`+`value` (I2C/I3C), `command` (SPI), or `delay`.
+- Each step must have at least one of:
+  - `address` **and** `value` (I2C/I3C write step),
+  - `command` (SPI write step), or
+  - `delay`.
+- For I2C/I3C steps, `address` and `value` must appear together: specifying one without the other is a **validation error**.
+- For I2C/I3C steps, `value` must represent at least one byte — `value: []` is a **validation error**.
+- For SPI steps, `command` must contain at least one byte — `command: []` is a **validation error**.
 - `delay` values must be valid duration strings and ≤ 10s (to prevent blocking the poll loop).
 
 ### Protocol

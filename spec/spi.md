@@ -88,7 +88,7 @@ SPI has no register addressing model — writes are just byte sequences sent ove
 
 | Device | Init Writes | Pre-Poll |
 |--------|------------|----------|
-| ADS1115 (via SPI) | Configure gain, mux, data rate | Start conversion |
+| AD7124 (SPI ADC) | Configure filter, gain, channel map | Start conversion |
 | MAX31855 | — | — (always ready) |
 | MCP3008 | — | — (conversion per read) |
 

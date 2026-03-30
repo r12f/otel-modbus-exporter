@@ -15,7 +15,7 @@ export pipeline are fully reusable.
 - **Linux only** — uses the Linux I3C subsystem (`/sys/bus/i3c/devices/`) and
   `/dev/i3c-N` device files.
 - Requires kernel I3C support (v4.20+) with appropriate controller drivers.
-- The process must have read permission on the I3C device file.
+- The process must have read/write permission on the I3C device file (write permission is required for `init_writes` and `pre_poll`).
 
 ## Crate
 
