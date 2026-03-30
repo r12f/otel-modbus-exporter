@@ -182,7 +182,7 @@ pub enum AddressMode {
 /// NACK-triggered re-enumeration). The reader is therefore wrapped in
 /// `Arc<tokio::sync::Mutex<..>>` at the call site.
 pub struct I3cMetricReader {
-    pub(crate) device: Arc<std::sync::Mutex<Box<dyn I3cDevice>>>,
+    device: Arc<std::sync::Mutex<Box<dyn I3cDevice>>>,
     bus_path: String,
     address_mode: AddressMode,
     resolved_address: Option<u8>,
@@ -305,6 +305,18 @@ impl I3cMetricReader {
         if !matches!(self.address_mode, AddressMode::Static(_)) {
             self.resolved_address = None;
         }
+    }
+
+    /// Write bytes to a resolved I3C device address. Used by I3cMetricWriter.
+    pub fn write_bytes(&mut self, buf: &[u8]) -> Result<()> {
+        let dev_addr = self.resolve_address()?;
+        let mut dev = self
+            .device
+            .lock()
+            .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+        dev.write_read(dev_addr, buf, 0)
+            .context("I3C write_bytes")?;
+        Ok(())
     }
 
     /// Read bytes from a register on the I3C device with NACK retry logic.
@@ -460,16 +472,6 @@ impl I3cMetricReaderHandle {
             metrics: Vec::new(),
         }
     }
-
-    /// Get a clone of the shared client Arc.
-    pub fn shared_client(&self) -> Arc<tokio::sync::Mutex<I3cMetricReader>> {
-        Arc::clone(&self.client)
-    }
-
-    /// Get the bus lock.
-    pub fn shared_bus_lock(&self) -> BusLock {
-        self.bus_lock.clone()
-    }
 }
 
 #[async_trait]
@@ -543,12 +545,7 @@ impl crate::reader::MetricWriter for I3cMetricWriter {
                         .lock()
                         .map_err(|e| anyhow::anyhow!("bus lock poisoned: {e}"))?;
                     let mut c = client.blocking_lock();
-                    let dev_addr = c.resolve_address()?;
-                    let mut dev = c
-                        .device
-                        .lock()
-                        .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
-                    dev.write_read(dev_addr, &buf, 0)
+                    c.write_bytes(&buf)
                         .with_context(|| format!("I3C write step {}", idx))?;
                     Ok(())
                 })

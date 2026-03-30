@@ -245,27 +245,19 @@ impl MetricWriterFactory for MetricReaderFactoryImpl {
                 );
                 Ok(Some(Box::new(writer)))
             }
-            Protocol::Spi { device, .. } => {
+            Protocol::Spi {
+                device,
+                speed_hz,
+                mode,
+                bits_per_word,
+            } => {
                 #[cfg(target_os = "linux")]
                 let spi_device: Box<dyn spi::SpiDevice> = {
-                    // Re-open the same device for writing
-                    let speed_hz = match &collector.protocol {
-                        Protocol::Spi { speed_hz, .. } => *speed_hz,
-                        _ => unreachable!(),
-                    };
-                    let mode = match &collector.protocol {
-                        Protocol::Spi { mode, .. } => *mode,
-                        _ => unreachable!(),
-                    };
-                    let bits_per_word = match &collector.protocol {
-                        Protocol::Spi { bits_per_word, .. } => *bits_per_word,
-                        _ => unreachable!(),
-                    };
                     let mut dev = spi::linux_device::LinuxSpiDevice::new(
                         device.clone(),
-                        speed_hz,
-                        mode,
-                        bits_per_word,
+                        *speed_hz,
+                        *mode,
+                        *bits_per_word,
                     );
                     dev.open().context("failed to open SPI device for writer")?;
                     Box::new(dev)

@@ -129,21 +129,6 @@ impl SpiMetricReader {
         }
     }
 
-    /// Get a clone of the shared device Arc.
-    pub fn shared_device(&self) -> Arc<std::sync::Mutex<Box<dyn SpiDevice>>> {
-        Arc::clone(&self.device)
-    }
-
-    /// Get the device path.
-    pub fn device_path(&self) -> &str {
-        &self.device_path
-    }
-
-    /// Get the device lock.
-    pub fn shared_device_lock(&self) -> DeviceLock {
-        Arc::clone(&self.device_lock)
-    }
-
     /// Perform a synchronous SPI transfer.
     pub fn transfer_sync(&self, tx_buf: &[u8]) -> Result<Vec<u8>> {
         let mut dev = self

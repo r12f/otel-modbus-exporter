@@ -152,21 +152,6 @@ impl I2cMetricReader {
         }
     }
 
-    /// Get a clone of the shared device Arc (for creating a writer that shares the same device).
-    pub fn shared_device(&self) -> Arc<std::sync::Mutex<Box<dyn I2cDevice>>> {
-        Arc::clone(&self.device)
-    }
-
-    /// Get the bus path.
-    pub fn bus_path(&self) -> &str {
-        &self.bus_path
-    }
-
-    /// Get the bus lock.
-    pub fn shared_bus_lock(&self) -> BusLock {
-        Arc::clone(&self.bus_lock)
-    }
-
     /// Read bytes from a register address on the I2C device.
     pub fn read_register_sync(&self, register: u8, byte_count: usize) -> Result<Vec<u8>> {
         let mut dev = self

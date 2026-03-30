@@ -181,6 +181,7 @@ use crate::reader::{MetricFactory, MetricReaderFactory, MetricWriterFactory};
 
 struct MockFactory {
     clients: Mutex<Vec<Box<dyn MetricReaderTrait>>>,
+    writers: Mutex<Option<Box<dyn crate::reader::MetricWriter>>>,
 }
 
 impl MetricReaderFactory for MockFactory {
@@ -200,7 +201,8 @@ impl MetricWriterFactory for MockFactory {
         &self,
         _collector: &CollectorConfig,
     ) -> anyhow::Result<Option<Box<dyn crate::reader::MetricWriter>>> {
-        Ok(None)
+        let writers = self.writers.lock().unwrap().take();
+        Ok(writers)
     }
 }
 
@@ -215,6 +217,7 @@ async fn test_collector_polls_and_publishes() {
 
     let factory = MockFactory {
         clients: Mutex::new(vec![Box::new(mock)]),
+        writers: Mutex::new(None),
     };
 
     let engine = CollectorEngine::spawn(
@@ -245,6 +248,7 @@ async fn test_collector_graceful_shutdown() {
 
     let factory = MockFactory {
         clients: Mutex::new(vec![Box::new(mock)]),
+        writers: Mutex::new(None),
     };
 
     let engine = CollectorEngine::spawn(
@@ -272,6 +276,7 @@ async fn test_collector_reconnects_on_failure() {
 
     let factory = MockFactory {
         clients: Mutex::new(vec![Box::new(mock)]),
+        writers: Mutex::new(None),
     };
 
     let engine = CollectorEngine::spawn(
@@ -304,6 +309,7 @@ async fn test_collector_connect_backoff() {
 
     let factory = MockFactory {
         clients: Mutex::new(vec![Box::new(mock)]),
+        writers: Mutex::new(None),
     };
 
     let engine = CollectorEngine::spawn(
@@ -334,7 +340,8 @@ async fn test_multiple_collectors() {
     let mock2 = MockModbusClient::new().with_holding_register(100, vec![200]);
 
     let factory = MockFactory {
-        clients: Mutex::new(vec![Box::new(mock2), Box::new(mock1)]), // reversed since pop
+        clients: Mutex::new(vec![Box::new(mock2), Box::new(mock1)]),
+        writers: Mutex::new(None),
     };
 
     let engine = CollectorEngine::spawn(
@@ -354,6 +361,121 @@ async fn test_multiple_collectors() {
     let m2 = store.metrics_for("multi2");
     assert!((m1[0].value - 10.0).abs() < 0.001); // 100 * 0.1
     assert!((m2[0].value - 20.0).abs() < 0.001); // 200 * 0.1
+
+    engine.shutdown(Duration::from_secs(2)).await;
+}
+
+// ── Mock Writer ──────────────────────────────────────────────────
+
+use crate::config::{ByteValue, WriteStep};
+
+/// Mock writer that can be configured to fail N times then succeed.
+struct MockWriter {
+    fail_count: Arc<Mutex<u32>>,
+    call_count: Arc<Mutex<u32>>,
+}
+
+impl MockWriter {
+    fn new(fail_count: u32) -> Self {
+        Self {
+            fail_count: Arc::new(Mutex::new(fail_count)),
+            call_count: Arc::new(Mutex::new(0)),
+        }
+    }
+}
+
+#[async_trait]
+impl crate::reader::MetricWriter for MockWriter {
+    async fn execute_writes(&mut self, _steps: &[WriteStep]) -> Result<()> {
+        let mut calls = self.call_count.lock().unwrap();
+        *calls += 1;
+        let mut remaining = self.fail_count.lock().unwrap();
+        if *remaining > 0 {
+            *remaining -= 1;
+            return Err(anyhow::anyhow!("mock write failure"));
+        }
+        Ok(())
+    }
+}
+
+fn write_step_noop() -> WriteStep {
+    WriteStep {
+        address: Some(0x10),
+        value: Some(ByteValue::Single(0x01)),
+        command: None,
+        delay: None,
+    }
+}
+
+#[tokio::test]
+async fn test_init_writes_failure_triggers_reconnect() {
+    // init_writes fails once, then succeeds on reconnect
+    let store = MetricStore::new();
+    let mut cfg = test_collector_config("init_writes_test");
+    cfg.init_writes = vec![write_step_noop()];
+
+    let mock = MockModbusClient::new().with_holding_register(100, vec![250]);
+    let writer = MockWriter::new(1); // fail first call, succeed second
+
+    let factory = MockFactory {
+        clients: Mutex::new(vec![Box::new(mock)]),
+        writers: Mutex::new(Some(Box::new(writer))),
+    };
+
+    let engine = CollectorEngine::spawn(vec![cfg], store.clone(), BTreeMap::new(), &factory, None);
+
+    // Wait for backoff (1s) + reconnect + poll
+    tokio::time::sleep(Duration::from_millis(3000)).await;
+
+    let metrics = store.metrics_for("init_writes_test");
+    assert!(
+        !metrics.is_empty(),
+        "should eventually connect and poll after init_writes retry"
+    );
+
+    engine.shutdown(Duration::from_secs(2)).await;
+}
+
+#[tokio::test]
+async fn test_pre_poll_skip_then_reconnect_after_3_failures() {
+    // pre_poll fails 4 times: first 2 skip cycles, 3rd triggers reconnect, 4th (after reconnect) succeeds
+    let store = MetricStore::new();
+    let mut cfg = test_collector_config("pre_poll_test");
+    cfg.pre_poll = vec![write_step_noop()];
+    cfg.polling_interval = Duration::from_millis(50);
+
+    let mock = MockModbusClient::new().with_holding_register(100, vec![250]);
+    let writer = MockWriter::new(3); // fail 3 times then succeed
+
+    let factory = MockFactory {
+        clients: Mutex::new(vec![Box::new(mock)]),
+        writers: Mutex::new(Some(Box::new(writer))),
+    };
+
+    let im = Arc::new(crate::internal_metrics::InternalMetrics::new());
+    let engine = CollectorEngine::spawn(
+        vec![cfg],
+        store.clone(),
+        BTreeMap::new(),
+        &factory,
+        Some(im.clone()),
+    );
+
+    // Wait for: 2 skipped cycles + reconnect backoff + successful poll
+    tokio::time::sleep(Duration::from_millis(3000)).await;
+
+    let metrics = store.metrics_for("pre_poll_test");
+    assert!(
+        !metrics.is_empty(),
+        "should eventually poll after pre_poll reconnect"
+    );
+
+    // Verify error metrics were recorded for skipped cycles
+    let stats = im.get_or_create_collector("pre_poll_test");
+    assert!(
+        stats.polls_error.load(Relaxed) >= 2,
+        "should have recorded at least 2 poll errors for skipped cycles"
+    );
 
     engine.shutdown(Duration::from_secs(2)).await;
 }

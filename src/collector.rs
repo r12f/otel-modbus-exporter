@@ -27,6 +27,52 @@ fn map_metric_type(mt: config::MetricType) -> MetricType {
     }
 }
 
+/// Reconnect with exponential backoff, re-executing init_writes after successful connect.
+/// Returns the new backoff duration, or `None` if shutdown was requested.
+async fn reconnect_with_init_writes(
+    client: &mut Box<dyn MetricReader>,
+    writer: &mut Option<Box<dyn MetricWriter>>,
+    init_writes: &[config::WriteStep],
+    backoff: &mut Duration,
+    shutdown_rx: &mut watch::Receiver<bool>,
+    cancel: &CancellationToken,
+    pre_poll_failures: &mut u32,
+) -> bool {
+    loop {
+        let _ = client.disconnect().await;
+        tokio::select! {
+            _ = tokio::time::sleep(*backoff) => {}
+            _ = shutdown_rx.changed() => {
+                cancel.cancel();
+                let _ = client.disconnect().await;
+                return false;
+            }
+        }
+        *backoff = (*backoff * 2).min(MAX_BACKOFF);
+        match client.connect().await {
+            Ok(()) => {
+                info!("reconnected");
+                *backoff = INITIAL_BACKOFF;
+                *pre_poll_failures = 0;
+                // Re-execute init_writes after reconnect
+                if let Some(ref mut w) = writer {
+                    if !init_writes.is_empty() {
+                        if let Err(e) = w.execute_writes(init_writes).await {
+                            warn!(error = %e, "init_writes failed after reconnect");
+                            continue; // retry reconnect
+                        }
+                        info!("init_writes re-executed after reconnect");
+                    }
+                }
+                return true;
+            }
+            Err(e) => {
+                warn!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
+            }
+        }
+    }
+}
+
 /// Run a single collector loop. This is the core of each collector task.
 #[instrument(level = "info", skip_all, fields(collector = %collector.name))]
 async fn run_collector(
@@ -65,8 +111,15 @@ async fn run_collector(
                 if let Some(ref mut w) = writer {
                     if !collector.init_writes.is_empty() {
                         if let Err(e) = w.execute_writes(&collector.init_writes).await {
-                            warn!(error = %e, "init_writes failed after connect, will reconnect");
+                            warn!(error = %e, backoff_secs = backoff.as_secs(), "init_writes failed after connect, will reconnect with backoff");
                             let _ = client.disconnect().await;
+                            tokio::select! {
+                                _ = tokio::time::sleep(backoff) => {}
+                                _ = shutdown_rx.changed() => {
+                                    cancel.cancel();
+                                    return;
+                                }
+                            }
                             backoff = (backoff * 2).min(MAX_BACKOFF);
                             continue;
                         }
@@ -127,6 +180,13 @@ async fn run_collector(
                         connection_error = true;
                         // Fall through to reconnect logic below
                     } else {
+                        // Record error metrics for skipped cycle
+                        if let Some(ref im) = internal_metrics {
+                            let elapsed_secs = start.elapsed().as_secs_f64();
+                            let stats = im.get_or_create_collector(&collector.name);
+                            stats.set_poll_duration(elapsed_secs);
+                            stats.polls_error.fetch_add(1, Relaxed);
+                        }
                         // Skip this cycle, sleep and retry
                         let elapsed = start.elapsed();
                         if elapsed < poll_interval {
@@ -157,39 +217,18 @@ async fn run_collector(
                 stats.set_poll_duration(elapsed_secs);
                 stats.polls_error.fetch_add(1, Relaxed);
             }
-            // Reconnect with backoff
-            loop {
-                let _ = client.disconnect().await;
-                tokio::select! {
-                    _ = tokio::time::sleep(backoff) => {}
-                    _ = shutdown_rx.changed() => {
-                        cancel.cancel();
-                        let _ = client.disconnect().await;
-                        return;
-                    }
-                }
-                backoff = (backoff * 2).min(MAX_BACKOFF);
-                match client.connect().await {
-                    Ok(()) => {
-                        info!("reconnected");
-                        backoff = INITIAL_BACKOFF;
-                        pre_poll_consecutive_failures = 0;
-                        // Re-execute init_writes after reconnect
-                        if let Some(ref mut w) = writer {
-                            if !collector.init_writes.is_empty() {
-                                if let Err(e) = w.execute_writes(&collector.init_writes).await {
-                                    warn!(error = %e, "init_writes failed after reconnect");
-                                    continue; // retry reconnect
-                                }
-                                info!("init_writes re-executed after reconnect");
-                            }
-                        }
-                        break;
-                    }
-                    Err(e) => {
-                        warn!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
-                    }
-                }
+            if !reconnect_with_init_writes(
+                &mut client,
+                &mut writer,
+                &collector.init_writes,
+                &mut backoff,
+                &mut shutdown_rx,
+                &cancel,
+                &mut pre_poll_consecutive_failures,
+            )
+            .await
+            {
+                return;
             }
             continue;
         }
@@ -256,39 +295,18 @@ async fn run_collector(
                 stats.polls_error.fetch_add(1, Relaxed);
             }
 
-            // Reconnect with backoff
-            loop {
-                let _ = client.disconnect().await;
-                tokio::select! {
-                    _ = tokio::time::sleep(backoff) => {}
-                    _ = shutdown_rx.changed() => {
-                        cancel.cancel();
-                        let _ = client.disconnect().await;
-                        return;
-                    }
-                }
-                backoff = (backoff * 2).min(MAX_BACKOFF);
-                match client.connect().await {
-                    Ok(()) => {
-                        info!("reconnected");
-                        backoff = INITIAL_BACKOFF;
-                        pre_poll_consecutive_failures = 0;
-                        // Re-execute init_writes after reconnect
-                        if let Some(ref mut w) = writer {
-                            if !collector.init_writes.is_empty() {
-                                if let Err(e) = w.execute_writes(&collector.init_writes).await {
-                                    warn!(error = %e, "init_writes failed after reconnect");
-                                    continue; // retry reconnect
-                                }
-                                info!("init_writes re-executed after reconnect");
-                            }
-                        }
-                        break;
-                    }
-                    Err(e) => {
-                        warn!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
-                    }
-                }
+            if !reconnect_with_init_writes(
+                &mut client,
+                &mut writer,
+                &collector.init_writes,
+                &mut backoff,
+                &mut shutdown_rx,
+                &cancel,
+                &mut pre_poll_consecutive_failures,
+            )
+            .await
+            {
+                return;
             }
             continue;
         }
