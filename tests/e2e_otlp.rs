@@ -6,135 +6,22 @@
 #[allow(dead_code)]
 mod common;
 
-use std::collections::HashMap;
-use std::future;
-use std::io;
-use std::net::{SocketAddr, TcpListener as StdTcpListener};
-use std::sync::Arc;
+use std::net::TcpListener as StdTcpListener;
 use std::time::Duration;
 
-use tokio::net::TcpListener;
 use tokio::process::Command;
-use tokio_modbus::prelude::*;
-use tokio_modbus::server::tcp::{accept_tcp_connection, Server};
-use tokio_modbus::server::Service;
 
 use common::{standard_fixtures, TestFixtures};
-
-// ── Modbus TCP Simulator (same as e2e_modbus.rs) ─────────────────────
-
-#[derive(Clone)]
-struct SimulatorService {
-    holding: Arc<HashMap<u16, u16>>,
-    input: Arc<HashMap<u16, u16>>,
-    coils: Arc<HashMap<u16, bool>>,
-}
-
-impl SimulatorService {
-    fn from_fixtures(fixtures: &TestFixtures) -> Self {
-        let mut holding = HashMap::new();
-        let mut input = HashMap::new();
-        let mut coils = HashMap::new();
-
-        for m in &fixtures.metrics {
-            match m.register_type {
-                "holding" => {
-                    for (i, &val) in m.raw_registers.iter().enumerate() {
-                        holding.insert(m.address + i as u16, val);
-                    }
-                }
-                "input" => {
-                    for (i, &val) in m.raw_registers.iter().enumerate() {
-                        input.insert(m.address + i as u16, val);
-                    }
-                }
-                "coil" => {
-                    for (i, &val) in m.raw_registers.iter().enumerate() {
-                        coils.insert(m.address + i as u16, val != 0);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        Self {
-            holding: Arc::new(holding),
-            input: Arc::new(input),
-            coils: Arc::new(coils),
-        }
-    }
-
-    fn read_holding(&self, addr: u16, count: u16) -> Vec<u16> {
-        (addr..addr + count)
-            .map(|a| self.holding.get(&a).copied().unwrap_or(0))
-            .collect()
-    }
-
-    fn read_input(&self, addr: u16, count: u16) -> Vec<u16> {
-        (addr..addr + count)
-            .map(|a| self.input.get(&a).copied().unwrap_or(0))
-            .collect()
-    }
-
-    fn read_coils(&self, addr: u16, count: u16) -> Vec<bool> {
-        (addr..addr + count)
-            .map(|a| self.coils.get(&a).copied().unwrap_or(false))
-            .collect()
-    }
-}
-
-impl Service for SimulatorService {
-    type Request = Request<'static>;
-    type Response = Response;
-    type Exception = Exception;
-    type Future = future::Ready<Result<Self::Response, Self::Exception>>;
-
-    fn call(&self, req: Self::Request) -> Self::Future {
-        let resp = match req {
-            Request::ReadHoldingRegisters(addr, count) => {
-                Response::ReadHoldingRegisters(self.read_holding(addr, count))
-            }
-            Request::ReadInputRegisters(addr, count) => {
-                Response::ReadInputRegisters(self.read_input(addr, count))
-            }
-            Request::ReadCoils(addr, count) => Response::ReadCoils(self.read_coils(addr, count)),
-            Request::ReadDiscreteInputs(_, count) => {
-                Response::ReadDiscreteInputs(vec![false; count as usize])
-            }
-            _ => return future::ready(Err(Exception::IllegalFunction)),
-        };
-        future::ready(Ok(resp))
-    }
-}
-
-async fn start_simulator(fixtures: &TestFixtures) -> (SocketAddr, tokio::task::JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let server = Server::new(listener);
-    let service = SimulatorService::from_fixtures(fixtures);
-
-    let handle = tokio::spawn(async move {
-        let new_service = Arc::new(move |_socket_addr: SocketAddr| {
-            let svc = service.clone();
-            Ok(Some(svc)) as io::Result<Option<SimulatorService>>
-        });
-        let on_connected = |stream: tokio::net::TcpStream, socket_addr: SocketAddr| {
-            let ns = Arc::clone(&new_service);
-            async move { accept_tcp_connection(stream, socket_addr, &*ns) }
-        };
-        let _ = server
-            .serve(&on_connected, |err: io::Error| {
-                eprintln!("simulator process error: {err}");
-            })
-            .await;
-    });
-
-    (addr, handle)
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
 /// Find a free TCP port by binding to :0 and returning the assigned port.
+///
+/// TODO: There is an inherent TOCTOU race here — the port may be claimed by
+/// another process between the time we release the listener and the time the
+/// target process binds to it. For now this is acceptable in test code; a more
+/// robust approach would hold all listeners simultaneously and drop them just
+/// before spawning the processes.
 fn free_port() -> u16 {
     let listener = StdTcpListener::bind("127.0.0.1:0").unwrap();
     listener.local_addr().unwrap().port()
@@ -148,7 +35,8 @@ fn find_otelcol() -> Option<String> {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
-            .is_ok()
+            .map(|s| s.success())
+            .unwrap_or(false)
         {
             return Some(name.to_string());
         }
@@ -201,7 +89,7 @@ service:
 /// Generate bus-exporter config with OTLP enabled pointing at the collector.
 fn generate_bus_exporter_config(
     dir: &std::path::Path,
-    sim_addr: &SocketAddr,
+    sim_addr: &std::net::SocketAddr,
     otlp_port: u16,
     fixtures: &TestFixtures,
 ) -> std::path::PathBuf {
@@ -266,7 +154,7 @@ async fn e2e_otlp_export() {
     let fixtures = standard_fixtures();
 
     // 1. Start Modbus TCP simulator
-    let (sim_addr, sim_handle) = start_simulator(&fixtures).await;
+    let (sim_addr, sim_handle) = common::start_simulator(&fixtures).await;
 
     // 2. Allocate ports and generate configs
     let otlp_port = free_port();
@@ -289,11 +177,21 @@ async fn e2e_otlp_export() {
     // Give the collector a moment to start
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // Verify it's still running
-    assert!(
-        otelcol_child.try_wait().unwrap().is_none(),
-        "otel-collector exited prematurely"
-    );
+    // Verify it's still running; log stderr on premature exit
+    if let Some(status) = otelcol_child.try_wait().unwrap() {
+        let stderr = otelcol_child.stderr.take();
+        let stderr_output = if let Some(mut se) = stderr {
+            use tokio::io::AsyncReadExt;
+            let mut buf = String::new();
+            let _ = se.read_to_string(&mut buf).await;
+            buf
+        } else {
+            String::from("<stderr not captured>")
+        };
+        panic!(
+            "otel-collector exited prematurely with status {status}\nstderr:\n{stderr_output}"
+        );
+    }
 
     // 4. Start bus-exporter run
     let binary = find_binary();
@@ -304,6 +202,23 @@ async fn e2e_otlp_export() {
         .kill_on_drop(true)
         .spawn()
         .expect("failed to start bus-exporter");
+
+    // Verify bus-exporter is still running after a brief warmup
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    if let Some(status) = bus_child.try_wait().unwrap() {
+        let stderr = bus_child.stderr.take();
+        let stderr_output = if let Some(mut se) = stderr {
+            use tokio::io::AsyncReadExt;
+            let mut buf = String::new();
+            let _ = se.read_to_string(&mut buf).await;
+            buf
+        } else {
+            String::from("<stderr not captured>")
+        };
+        panic!(
+            "bus-exporter exited prematurely with status {status}\nstderr:\n{stderr_output}"
+        );
+    }
 
     // 5. Wait for metrics to flow through the pipeline, then scrape Prometheus
     let prom_url = format!("http://127.0.0.1:{prom_port}/metrics");
