@@ -3,16 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'spec/**'
-      - '*.md'
-      - 'docs/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'spec/**'
-      - '*.md'
-      - 'docs/**'
 
 permissions:
   contents: read
