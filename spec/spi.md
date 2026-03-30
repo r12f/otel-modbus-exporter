@@ -30,6 +30,11 @@ collectors:
       speed_hz: 1000000            # Clock speed in Hz
       mode: 0                      # SPI mode (0-3)
     polling_interval: "1s"
+    init_writes:                    # optional: one-time setup on startup/reconnect
+      - command: [0x01, 0x83]      # e.g., write config register
+    pre_poll:                       # optional: trigger before each read cycle
+      - command: [0x01, 0x80]      # e.g., start conversion
+      - delay: "10ms"              # wait for conversion
     metrics:
       - name: adc_voltage
         type: gauge
@@ -72,6 +77,30 @@ read is a **command → response** transfer. SPI metrics use different addressin
 | `description` | `string` | No | `""` | Human-readable description |
 
 **Not used** for SPI: `register_type`, `address` (replaced by `command`), `slave_id`.
+
+## Write Operations
+
+SPI writes are used by `init_writes` and `pre_poll` (see [config.md](config.md#register-writes)):
+
+1. **Transmit** the `command` bytes to the device.
+
+SPI has no register addressing model — writes are just byte sequences sent over the bus. Common patterns:
+
+| Device | Init Writes | Pre-Poll |
+|--------|------------|----------|
+| AD7124 (SPI ADC) | Configure filter, gain, channel map | Start conversion |
+| MAX31855 | — | — (always ready) |
+| MCP3008 | — | — (conversion per read) |
+
+For SPI, the `WriteStep` uses `command` instead of `address`+`value`:
+
+```yaml
+init_writes:
+  - command: [0x01, 0x83]     # bytes to transmit
+pre_poll:
+  - command: [0x01, 0x80]     # start conversion
+  - delay: "10ms"
+```
 
 ## Read Operations
 

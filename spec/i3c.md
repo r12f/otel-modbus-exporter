@@ -15,7 +15,7 @@ export pipeline are fully reusable.
 - **Linux only** — uses the Linux I3C subsystem (`/sys/bus/i3c/devices/`) and
   `/dev/i3c-N` device files.
 - Requires kernel I3C support (v4.20+) with appropriate controller drivers.
-- The process must have read permission on the I3C device file.
+- The process must have read/write permission on the I3C device file (write permission is required for `init_writes` and `pre_poll`).
 
 ## Crate
 
@@ -127,6 +127,13 @@ collectors:
       bus: "/dev/i3c-0"
       pid: "0x0123456789AB"
     polling_interval: "5s"
+    init_writes:                     # optional: one-time setup on startup/reconnect
+      - address: 0x20
+        value: 0x01                  # e.g., set measurement mode
+    pre_poll:                        # optional: trigger before each read cycle
+      - address: 0x20
+        value: 0x02                  # e.g., trigger measurement
+      - delay: "20ms"               # wait for conversion
     metrics:
       - name: temperature
         type: gauge
@@ -195,6 +202,14 @@ I3C metrics reuse the standard `Metric` schema with these differences:
 | `byte_order` | Same | Same (applies to multi-byte reads). `mid_big_endian`/`mid_little_endian` are Modbus-specific — use only `big_endian`/`little_endian` for I3C. |
 
 **`u8` data type** is available for I3C (single byte read, same as I2C).
+
+## Write Operations
+
+I3C writes are used by `init_writes` and `pre_poll` (see [config.md](config.md#register-writes)):
+
+1. **Write** the register address byte followed by the value byte(s).
+
+I3C uses the same write-register model as I2C. Sensors on I3C buses often need initialization or measurement triggers just like their I2C counterparts.
 
 ## Read Operations
 

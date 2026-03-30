@@ -30,10 +30,24 @@ This strict **producer/consumer separation** ensures:
 // CancellationToken for cooperative shutdown inside read()
 let cancel = CancellationToken::new();
 
+// Execute init_writes once at startup (I2C/SPI/I3C only)
+// Writes are performed via a separate MetricWriter trait,
+// not through the MetricReader interface. The collector
+// holds both a reader and an optional writer for the same
+// bus connection. See reader.md for the trait boundary.
+if let Some(writer) = &mut writer {
+    writer.execute_writes(&collector.init_writes).await?;
+}
+
 loop {
     let start = Instant::now();
     let mut local_cache = HashMap::new();
     let mut had_error = false;
+
+    // Execute pre_poll writes before each read cycle (I2C/SPI/I3C only)
+    if let Some(writer) = &mut writer {
+        writer.execute_writes(&collector.pre_poll).await?;
+    }
 
     // Batch read all metrics via reader — returns ReadResults
     let ReadResults { metrics: read_results, io_count } = client.read(&cancel).await;
@@ -84,6 +98,7 @@ When a connection fails or is lost:
 2. Wait with exponential backoff: 1s → 2s → 4s → 8s → … → max 60s.
 3. Reset backoff to 1s after a successful poll cycle.
 4. During backoff, the collector task is sleeping (not consuming CPU).
+5. After reconnect, re-execute `init_writes` before resuming the poll loop.
 
 ## Error Handling
 
@@ -93,6 +108,11 @@ When a connection fails or is lost:
 - The failed metric retains its previous value (stale).
 - An error counter is incremented per metric.
 - Errors are logged at `warn` level.
+
+### Write Step Errors (`init_writes` / `pre_poll`)
+
+- **`init_writes` failure**: Treated as a connection-level error. The collector enters reconnect/backoff. `init_writes` will be re-executed after reconnect.
+- **`pre_poll` failure**: The current poll cycle is **skipped** (no metrics are read). Logged at `warn` level. The next poll cycle will retry `pre_poll` from scratch. If `pre_poll` fails 3 consecutive times, treated as a connection-level error (triggers reconnect/backoff).
 
 ### Per-Collector Errors
 
