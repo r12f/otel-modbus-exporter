@@ -338,7 +338,10 @@ async fn e2e_otlp_export() {
             found_metrics = true;
             break;
         } else {
-            eprintln!("attempt {attempt}: metrics not yet available ({} bytes)", body.len());
+            eprintln!(
+                "attempt {attempt}: metrics not yet available ({} bytes)",
+                body.len()
+            );
         }
     }
 
@@ -378,9 +381,12 @@ fn validate_prometheus_output(body: &str, fixtures: &TestFixtures) {
         // Parse the value from the last matching line
         let line = matching_lines.last().unwrap();
         let value_str = line.rsplit_once(' ').expect("no space in metric line").1;
-        let actual: f64 = value_str
-            .parse()
-            .unwrap_or_else(|e| panic!("failed to parse value '{}' for metric '{}': {}", value_str, metric_name, e));
+        let actual: f64 = value_str.parse().unwrap_or_else(|e| {
+            panic!(
+                "failed to parse value '{}' for metric '{}': {}",
+                value_str, metric_name, e
+            )
+        });
 
         let diff = (actual - fixture.expected_value).abs();
         assert!(

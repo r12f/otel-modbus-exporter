@@ -57,7 +57,9 @@ jobs:
             | sudo tar xz -C /usr/local/bin otelcol-contrib
           otelcol-contrib --version
       - name: Run native E2E tests
-        run: cargo test --test 'e2e_*' -- --nocapture --include-ignored
+        run: cargo test --test 'e2e_*' -- --nocapture
+      - name: Run OTLP E2E test (ignored without otelcol)
+        run: cargo test --test e2e_otlp -- --nocapture --ignored
 
   docker:
     runs-on: ubuntu-latest
