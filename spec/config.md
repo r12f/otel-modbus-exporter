@@ -44,7 +44,7 @@ See [`config/example.yaml`](../config/example.yaml) for a complete annotated exa
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `enabled` | `bool` | No | `false` | Enable OTLP export |
-| `endpoint` | `string` | Yes (if enabled) | — | OTLP HTTP endpoint (e.g., `http://host:4318`) |
+| `endpoint` | `string` | Yes (if enabled) | — | Full OTLP HTTP endpoint including signal path (e.g., `http://host:4318/v1/metrics`) |
 | `timeout` | `string` | No | `"10s"` | Request timeout (duration string) |
 | `headers` | `map<string, string>` | No | `{}` | Additional HTTP headers |
 

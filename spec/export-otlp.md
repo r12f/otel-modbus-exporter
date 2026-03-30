@@ -45,6 +45,6 @@ Retry behavior is delegated to the OpenTelemetry SDK defaults (exponential backo
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | bool | false | Enable OTLP export |
-| `endpoint` | string | — | Base URL of the OTLP collector |
+| `endpoint` | string | — | Full OTLP HTTP endpoint including signal path (e.g., `http://host:4318/v1/metrics`) |
 | `timeout` | duration | 10s | HTTP request timeout |
 | `headers` | map | {} | Additional HTTP headers |

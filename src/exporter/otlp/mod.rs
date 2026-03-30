@@ -35,18 +35,9 @@ fn build_meter_provider(
     interval: std::time::Duration,
     resource: Resource,
 ) -> Result<SdkMeterProvider> {
-    // The opentelemetry-otlp SDK (v0.29) treats `with_endpoint` as the full
-    // URL — it does NOT auto-append `/v1/metrics`.  Append the signal path if
-    // the user provided only a base URL (the common case).
-    let full_endpoint = if endpoint.ends_with("/v1/metrics") {
-        endpoint.to_string()
-    } else {
-        format!("{}/v1/metrics", endpoint.trim_end_matches('/'))
-    };
-
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_http()
-        .with_endpoint(&full_endpoint)
+        .with_endpoint(endpoint)
         .with_headers(headers.clone())
         .with_timeout(timeout)
         .build()

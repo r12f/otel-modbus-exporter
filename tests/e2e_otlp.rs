@@ -115,7 +115,7 @@ fn generate_bus_exporter_config(
         r#"exporters:
   otlp:
     enabled: true
-    endpoint: "http://127.0.0.1:{otlp_port}"
+    endpoint: "http://127.0.0.1:{otlp_port}/v1/metrics"
     interval: "2s"
     timeout: "5s"
   prometheus:

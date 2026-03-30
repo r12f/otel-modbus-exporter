@@ -12,7 +12,7 @@ logging:
 exporters:
   otlp:
     enabled: false
-    endpoint: "http://localhost:4318"
+    endpoint: "http://localhost:4318/v1/metrics"
   prometheus:
     enabled: true
     listen: "0.0.0.0:9090"
